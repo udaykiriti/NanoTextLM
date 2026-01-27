@@ -6,43 +6,14 @@ import os
 import sys
 from rich.console import Console
 from rich.panel import Panel
-from rich.markdown import Markdown
 from rich.live import Live
-from rich.text import Text
 
 # Initialize Rich Console
 console = Console()
 
-def stream_generate(model, tokenizer, prompt, device, max_new_tokens=100):
-    # Encode
-    ids = tokenizer.encode(prompt).ids
-    idx = torch.tensor([ids], dtype=torch.long, device=device)
-    
-    # Placeholder for accumulated text
-    generated_text = ""
-    
-    with Live(Panel("", title="NanoTextLM", border_style="blue"), refresh_per_second=10) as live:
-        # Stream tokens
-        for token_idx in model.generate_stream(idx, max_new_tokens=max_new_tokens):
-            # Decode single token (careful with subwords, but simple decoding usually works for display)
-            # A better approach for BPE is to decode the whole sequence and take the diff, 
-            # but for simplicity we decode the single token here. 
-            # Note: This might look weird for partial bytes, but usually fine for English.
-            
-            token_val = token_idx.item()
-            decoded_part = tokenizer.decode([token_val])
-            
-            generated_text += decoded_part
-            
-            # Update the panel with accumulated text
-            live.update(Panel(generated_text, title="NanoTextLM", border_style="green"))
-
-    return generated_text
-
 def main():
     PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     model_path = os.path.join(PROJECT_ROOT, "checkpoints", "final_model.pt")
-    # If final model doesn't exist, try best model
     if not os.path.exists(model_path):
         model_path = os.path.join(PROJECT_ROOT, "checkpoints", "best_model.pt")
         
@@ -58,7 +29,9 @@ def main():
     
     if os.path.exists(model_path):
         try:
-            model.load_state_dict(torch.load(model_path, map_location=device))
+            state_dict = torch.load(model_path, map_location=device)
+            if 'model' in state_dict: state_dict = state_dict['model']
+            model.load_state_dict(state_dict)
             console.print(f"[bold green]Loaded model from {model_path}[/bold green]")
         except Exception as e:
              console.print(f"[bold red]Error loading weights: {e}[/bold red]")
@@ -80,15 +53,48 @@ def main():
         
     tokenizer = Tokenizer.from_file(tokenizer_path)
     
-    console.print(Panel("Type 'exit' to quit. Enjoy!", title="Welcome", border_style="bold magenta"))
+    console.print(Panel("Type 'exit' to quit. Context is maintained.", title="NanoTextLM Chat", border_style="bold magenta"))
 
+    # Chat History
+    history_ids = None
+    
     while True:
         prompt = console.input("[bold cyan]User > [/bold cyan]")
         if prompt.lower() in ["exit", "quit"]:
             break
             
-        stream_generate(model, tokenizer, prompt, device)
-        console.print() # Newline
+        # Encode new user input
+        new_ids = tokenizer.encode(prompt).ids
+        new_idx = torch.tensor([new_ids], dtype=torch.long, device=device)
+        
+        # Append to history
+        if history_ids is None:
+            history_ids = new_idx
+        else:
+            history_ids = torch.cat((history_ids, new_idx), dim=1)
+            
+        # Context Window Check (Simple Truncation)
+        if history_ids.size(1) > m_conf.max_seq_len - 100:
+             # Keep last N tokens
+             history_ids = history_ids[:, -(m_conf.max_seq_len - 100):]
+        
+        generated_text = ""
+        
+        with Live(Panel("", title="NanoTextLM", border_style="blue"), refresh_per_second=10) as live:
+            # Generate response (streaming)
+            # We must be careful: generate_stream returns ALL tokens in the new sequence or just new ones?
+            # My implementation yields `idx_next`. So it's just the new token.
+            
+            for token_idx in model.generate_stream(history_ids, max_new_tokens=150, temperature=0.8, top_p=0.9):
+                token_val = token_idx.item()
+                text_chunk = tokenizer.decode([token_val])
+                generated_text += text_chunk
+                live.update(Panel(generated_text, title="NanoTextLM", border_style="green"))
+                
+                # Append to history
+                history_ids = torch.cat((history_ids, token_idx), dim=1)
+
+        console.print()
 
 if __name__ == "__main__":
     try:
