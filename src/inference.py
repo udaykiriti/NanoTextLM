@@ -68,6 +68,11 @@ def main():
     
     model.eval()
     
+    # Optimization: Compile
+    if hasattr(torch, "compile"):
+        console.print("[yellow]Compiling model... (this may take a moment)[/yellow]")
+        model = torch.compile(model)
+    
     # Load Tokenizer
     if not os.path.exists(tokenizer_path):
         console.print("[bold red]Tokenizer not found. Please run training first.[/bold red]")

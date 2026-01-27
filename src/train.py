@@ -102,10 +102,19 @@ def train():
     # Model
     model = NanoTextLM(m_conf).to(t_conf.device)
     print(f"Model initialized. Parameters: {sum(p.numel() for p in model.parameters())/1e6:.2f}M")
+
+    # Optimization: Compile
+    if hasattr(torch, "compile"):
+        print("Compiling model with torch.compile...")
+        model = torch.compile(model)
     
     # Optimizer
-    optimizer = torch.optim.AdamW(model.parameters(), lr=t_conf.learning_rate, weight_decay=t_conf.weight_decay)
-    scaler = torch.cuda.amp.GradScaler(enabled=(t_conf.device.type == 'cuda'))
+    # Use fused AdamW if available (PyTorch 2.0+ on CUDA)
+    use_fused = t_conf.device.type == 'cuda'
+    extra_args = dict(fused=True) if use_fused else dict()
+    print(f"Using AdamW optimizer (fused={use_fused})")
+    optimizer = torch.optim.AdamW(model.parameters(), lr=t_conf.learning_rate, weight_decay=t_conf.weight_decay, **extra_args)
+    scaler = torch.amp.GradScaler(enabled=(t_conf.device.type == 'cuda'))
 
     # Training Loop
     model.train()
