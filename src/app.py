@@ -34,6 +34,8 @@ def load_resources():
             print("Warning: No checkpoint found. Using random weights.")
             
         model.eval()
+        # Compilation might be too slow for first request, optional
+        # model = torch.compile(model)
         tokenizer = Tokenizer.from_file(tokenizer_path)
 
 @app.route("/")
@@ -45,6 +47,9 @@ def generate_stream_api():
     load_resources()
     data = request.json
     prompt = data.get("prompt", "")
+    temperature = data.get("temperature", 1.0)
+    top_p = data.get("top_p", 0.9)
+    max_tokens = data.get("max_tokens", 150)
     
     if not prompt:
         return jsonify({"error": "No prompt provided"}), 400
@@ -56,11 +61,9 @@ def generate_stream_api():
         
         # Stream
         with torch.no_grad():
-            for token_idx in model.generate_stream(idx, max_new_tokens=150):
+            for token_idx in model.generate_stream(idx, max_new_tokens=max_tokens, temperature=temperature, top_p=top_p):
                 token_val = token_idx.item()
                 text_chunk = tokenizer.decode([token_val])
-                # Yield SSE format or simple chunks
-                # We use simple chunks for fetch API stream reader
                 yield text_chunk
 
     return Response(stream_with_context(generate()), mimetype='text/plain')

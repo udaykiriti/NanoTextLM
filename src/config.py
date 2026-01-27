@@ -20,16 +20,16 @@ class NanoConfig(ModelConfig):
     max_seq_len: int = 256
     dropout: float = 0.2
 
-
 @dataclass
 class TrainingConfig:
     batch_size: int = 8
+    gradient_accumulation_steps: int = 4 # Simulate larger batch size (8*4=32)
     learning_rate: float = 3e-4
     max_epochs: int = 3
     weight_decay: float = 0.1
     log_every: int = 10
     save_every: int = 500
-    eval_every: int = 200  # Evaluate every N steps
+    eval_every: int = 200
     output_dir: str = "checkpoints"
     
     # Optimization

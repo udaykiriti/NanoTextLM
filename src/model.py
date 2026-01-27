@@ -104,35 +104,55 @@ class NanoTextLM(nn.Module):
             logits = self.lm_head(x[:, [-1], :])
         return logits, loss
 
-    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
+    def _sample_top_p(self, logits, temperature=1.0, top_k=None, top_p=None):
+        """
+        Helper function for sampling with Temperature, Top-K and Top-P (Nucleus) support.
+        """
+        logits = logits[:, -1, :] / temperature
+        
+        # Top-K
+        if top_k is not None:
+            v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+            logits[logits < v[:, [-1]]] = -float('Inf')
+            
+        # Top-P (Nucleus Sampling)
+        if top_p is not None and top_p < 1.0:
+            sorted_logits, sorted_indices = torch.sort(logits, descending=True)
+            cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+
+            # Remove tokens with cumulative probability above the threshold
+            sorted_indices_to_remove = cumulative_probs > top_p
+            
+            # Shift the indices to the right to keep also the first token above the threshold
+            sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
+            sorted_indices_to_remove[..., 0] = 0
+
+            indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
+            logits[indices_to_remove] = -float('Inf')
+
+        probs = F.softmax(logits, dim=-1)
+        idx_next = torch.multinomial(probs, num_samples=1)
+        return idx_next
+
+    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None, top_p=None):
         """
         Generate text using autoregressive sampling (legacy non-streaming).
         """
         for _ in range(max_new_tokens):
             idx_cond = idx if idx.size(1) <= self.config.max_seq_len else idx[:, -self.config.max_seq_len:]
             logits, _ = self(idx_cond)
-            logits = logits[:, -1, :] / temperature
-            if top_k is not None:
-                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-                logits[logits < v[:, [-1]]] = -float('Inf')
-            probs = F.softmax(logits, dim=-1)
-            idx_next = torch.multinomial(probs, num_samples=1)
+            idx_next = self._sample_top_p(logits, temperature, top_k, top_p)
             idx = torch.cat((idx, idx_next), dim=1)
         return idx
 
     @torch.no_grad()
-    def generate_stream(self, idx, max_new_tokens, temperature=1.0, top_k=None):
+    def generate_stream(self, idx, max_new_tokens, temperature=1.0, top_k=None, top_p=None):
         """
         Yields tokens one by one as they are generated for streaming applications.
         """
         for _ in range(max_new_tokens):
             idx_cond = idx if idx.size(1) <= self.config.max_seq_len else idx[:, -self.config.max_seq_len:]
             logits, _ = self(idx_cond)
-            logits = logits[:, -1, :] / temperature
-            if top_k is not None:
-                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-                logits[logits < v[:, [-1]]] = -float('Inf')
-            probs = F.softmax(logits, dim=-1)
-            idx_next = torch.multinomial(probs, num_samples=1)
+            idx_next = self._sample_top_p(logits, temperature, top_k, top_p)
             idx = torch.cat((idx, idx_next), dim=1)
             yield idx_next

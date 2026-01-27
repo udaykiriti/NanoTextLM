@@ -71,6 +71,7 @@ def train():
         m_conf = NanoConfig()
         t_conf = TrainingConfig(
             batch_size=32,
+            gradient_accumulation_steps=1,
             max_epochs=20, 
             eval_every=50,
             save_every=500,
@@ -79,9 +80,7 @@ def train():
             lr_decay_iters=2000,
             output_dir="checkpoints/demo"
         )
-        data_path = os.path.join(PROJECT_ROOT, "data", "processed", "train.bin") 
-        # Note: Shakespeare script saves to train.bin in data/processed too, overwriting? 
-        # Or usually shakespeare is small. The user script verified preparation.
+        data_path = os.path.join(PROJECT_ROOT, "data", "processed", "train.bin")
     else:
         m_conf = ModelConfig()
         t_conf = TrainingConfig()
@@ -135,10 +134,12 @@ def train():
     best_val_loss = 1e9
     t0 = time.time()
     
-    print("Starting training...")
+    print(f"Starting training with Gradient Accumulation = {t_conf.gradient_accumulation_steps}")
+    
+    optimizer.zero_grad(set_to_none=True)
     
     for epoch in range(t_conf.max_epochs):
-        for x, y in train_loader:
+        for micro_step, (x, y) in enumerate(train_loader):
             # Update Learning Rate
             lr = get_lr(iter_num, t_conf)
             for param_group in optimizer.param_groups:
@@ -151,38 +152,44 @@ def train():
             
             with ctx:
                 logits, loss = model(x, y)
+                # Scale loss for gradient accumulation
+                loss = loss / t_conf.gradient_accumulation_steps
             
             # Backward pass
-            optimizer.zero_grad(set_to_none=True)
             scaler.scale(loss).backward()
             
-            # Gradient Clipping
-            scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), t_conf.grad_clip)
-            
-            # Step
-            scaler.step(optimizer)
-            scaler.update()
-            
-            # Logging
-            if iter_num % t_conf.log_every == 0:
-                t1 = time.time()
-                dt = t1 - t0
-                t0 = t1
-                print(f"Epoch {epoch+1} | Step {iter_num} | Loss: {loss.item():.4f} | LR: {lr:.2e} | Time: {dt*1000:.2f}ms")
-
-            # Evaluation & Checkpointing
-            if iter_num > 0 and iter_num % t_conf.eval_every == 0:
-                losses = estimate_loss(model, {'train': train_loader, 'val': val_loader}, t_conf.device)
-                print(f"Step {iter_num} Evaluation: Train Loss {losses['train']:.4f}, Val Loss {losses['val']:.4f}")
+            # Conditional Step (Gradient Accumulation)
+            if (micro_step + 1) % t_conf.gradient_accumulation_steps == 0:
+                # Gradient Clipping
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), t_conf.grad_clip)
                 
-                if losses['val'] < best_val_loss:
-                    best_val_loss = losses['val']
-                    os.makedirs(t_conf.output_dir, exist_ok=True)
-                    print(f"Saving best model (val_loss {best_val_loss:.4f})")
-                    torch.save(model.state_dict(), os.path.join(t_conf.output_dir, "best_model.pt"))
-            
-            iter_num += 1
+                # Step
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad(set_to_none=True)
+                
+                # Logging (only on step)
+                if iter_num % t_conf.log_every == 0:
+                    t1 = time.time()
+                    dt = t1 - t0
+                    t0 = t1
+                    # Multiply loss back for display
+                    loss_val = loss.item() * t_conf.gradient_accumulation_steps
+                    print(f"Epoch {epoch+1} | Step {iter_num} | Loss: {loss_val:.4f} | LR: {lr:.2e} | Time: {dt*1000:.2f}ms")
+
+                # Evaluation & Checkpointing
+                if iter_num > 0 and iter_num % t_conf.eval_every == 0:
+                    losses = estimate_loss(model, {'train': train_loader, 'val': val_loader}, t_conf.device)
+                    print(f"Step {iter_num} Evaluation: Train Loss {losses['train']:.4f}, Val Loss {losses['val']:.4f}")
+                    
+                    if losses['val'] < best_val_loss:
+                        best_val_loss = losses['val']
+                        os.makedirs(t_conf.output_dir, exist_ok=True)
+                        print(f"Saving best model (val_loss {best_val_loss:.4f})")
+                        torch.save(model.state_dict(), os.path.join(t_conf.output_dir, "best_model.pt"))
+                
+                iter_num += 1
 
     # Save final
     os.makedirs(t_conf.output_dir, exist_ok=True)
