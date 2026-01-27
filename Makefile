@@ -16,7 +16,7 @@ infer:
 	python src/inference.py
 
 web:
-	python src/app.py
+	uvicorn src.app:app --host 0.0.0.0 --port 5000 --reload
 
 clean:
 	rm -rf __pycache__ .pytest_cache
