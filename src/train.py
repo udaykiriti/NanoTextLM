@@ -8,6 +8,9 @@ import tqdm
 import sys
 import math
 import time
+import argparse
+import random
+import numpy as np
 
 def get_lr(it, t_conf):
     # 1) linear warmup
@@ -37,14 +40,21 @@ def estimate_loss(model, dataloaders, device, eval_iters=50):
                 x, y = next(iter_loader)
                 
             x, y = x.to(device), y.to(device)
-            with torch.amp.autocast(device_type=device.type if device.type != 'mps' else 'cpu', enabled=(device.type == 'cuda')):
+            # Handle AMP context
+            ctx = torch.amp.autocast(device_type=device.type, dtype=torch.float16) if device.type == 'cuda' else torch.nullcontext()
+            with ctx:
                 logits, loss = model(x, y)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
     return out
 
-import argparse
+def seed_everything(seed=42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 def train():
     parser = argparse.ArgumentParser()
@@ -53,7 +63,6 @@ def train():
 
     # Paths
     PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    data_path = os.path.join(PROJECT_ROOT, "data", "processed", "train.bin")
     
     # Config
     if args.demo:
@@ -61,23 +70,28 @@ def train():
         from config import NanoConfig
         m_conf = NanoConfig()
         t_conf = TrainingConfig(
-            batch_size=32, # Larger batch size for smaller model
-            max_epochs=20, # More epochs for small dataset
+            batch_size=32,
+            max_epochs=20, 
             eval_every=50,
             save_every=500,
             learning_rate=1e-3,
             warmup_iters=50,
-            lr_decay_iters=2000
+            lr_decay_iters=2000,
+            output_dir="checkpoints/demo"
         )
+        data_path = os.path.join(PROJECT_ROOT, "data", "processed", "train.bin") 
+        # Note: Shakespeare script saves to train.bin in data/processed too, overwriting? 
+        # Or usually shakespeare is small. The user script verified preparation.
     else:
         m_conf = ModelConfig()
         t_conf = TrainingConfig()
+        data_path = os.path.join(PROJECT_ROOT, "data", "processed", "train.bin")
     
     # Device setup
     if t_conf.device.type == 'cuda':
         print(f"Using GPU: {torch.cuda.get_device_name(0)}")
-        torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
-        torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
+        torch.backends.cuda.matmul.allow_tf32 = True 
+        torch.backends.cudnn.allow_tf32 = True 
     else:
         print(f"Using Device: {t_conf.device}")
 
@@ -102,14 +116,13 @@ def train():
     # Model
     model = NanoTextLM(m_conf).to(t_conf.device)
     print(f"Model initialized. Parameters: {sum(p.numel() for p in model.parameters())/1e6:.2f}M")
-
+    
     # Optimization: Compile
     if hasattr(torch, "compile"):
         print("Compiling model with torch.compile...")
         model = torch.compile(model)
-    
-    # Optimizer
-    # Use fused AdamW if available (PyTorch 2.0+ on CUDA)
+
+    # Optimizer (Fused if available)
     use_fused = t_conf.device.type == 'cuda'
     extra_args = dict(fused=True) if use_fused else dict()
     print(f"Using AdamW optimizer (fused={use_fused})")
@@ -122,10 +135,7 @@ def train():
     best_val_loss = 1e9
     t0 = time.time()
     
-    print("Starting training with validation and LR scheduling...")
-    
-    # We'll train based on total iterations rather than strict epochs for simplicity in this loop
-    # or keep epochs but track global steps.
+    print("Starting training...")
     
     for epoch in range(t_conf.max_epochs):
         for x, y in train_loader:
@@ -137,8 +147,6 @@ def train():
             x, y = x.to(t_conf.device), y.to(t_conf.device)
             
             # Forward pass with Mixed Precision
-            # 'cuda' works for NVIDIA GPUs. For others, autocast might need adjustment or be disabled.
-            # We used t_conf.device.type logic in estimate_loss, reusing here.
             ctx = torch.amp.autocast(device_type=t_conf.device.type, dtype=torch.float16) if t_conf.device.type == 'cuda' else torch.nullcontext()
             
             with ctx:
@@ -182,4 +190,5 @@ def train():
     print("Training complete.")
 
 if __name__ == "__main__":
+    seed_everything(1337)
     train()

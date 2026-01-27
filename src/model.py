@@ -2,8 +2,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+from typing import Optional, Tuple
 
 class CausalSelfAttention(nn.Module):
+    """
+    Multi-head Causal Self-Attention with Flash Attention support.
+    """
     def __init__(self, config):
         super().__init__()
         assert config.d_model % config.n_heads == 0
@@ -11,8 +15,6 @@ class CausalSelfAttention(nn.Module):
         self.c_proj = nn.Linear(config.d_model, config.d_model)
         self.n_heads = config.n_heads
         self.d_head = config.d_model // config.n_heads
-        self.register_buffer("bias", torch.tril(torch.ones(config.max_seq_len, config.max_seq_len))
-                                     .view(1, 1, config.max_seq_len, config.max_seq_len))
         self.dropout = nn.Dropout(config.dropout)
         
     def forward(self, x):
@@ -23,9 +25,13 @@ class CausalSelfAttention(nn.Module):
         k = k.view(B, T, self.n_heads, self.d_head).transpose(1, 2)
         v = v.view(B, T, self.n_heads, self.d_head).transpose(1, 2)
         
-        # Flash Attention implementation (PyTorch 2.0+)
-        # is_causal=True handles the masking automatically and efficiently
-        y = F.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout.p if self.training else 0, is_causal=True)
+        # Flash Attention (PyTorch 2.0+)
+        y = F.scaled_dot_product_attention(
+            q, k, v, 
+            attn_mask=None, 
+            dropout_p=self.dropout.p if self.training else 0, 
+            is_causal=True
+        )
         
         y = y.transpose(1, 2).contiguous().view(B, T, C)
         return self.c_proj(y)
@@ -37,6 +43,7 @@ class MLP(nn.Module):
         self.gelu = nn.GELU()
         self.c_proj = nn.Linear(4 * config.d_model, config.d_model)
         self.dropout = nn.Dropout(config.dropout)
+
     def forward(self, x):
         return self.dropout(self.c_proj(self.gelu(self.c_fc(x))))
 
@@ -47,12 +54,16 @@ class Block(nn.Module):
         self.attn = CausalSelfAttention(config)
         self.ln_2 = nn.LayerNorm(config.d_model)
         self.mlp = MLP(config)
+
     def forward(self, x):
         x = x + self.attn(self.ln_1(x))
         x = x + self.mlp(self.ln_2(x))
         return x
 
 class NanoTextLM(nn.Module):
+    """
+    NanoTextLM: A lightweight GPT-style language model.
+    """
     def __init__(self, config):
         super().__init__()
         self.config = config
@@ -77,7 +88,7 @@ class NanoTextLM(nn.Module):
             torch.nn.init.zeros_(module.bias)
             torch.nn.init.ones_(module.weight)
 
-    def forward(self, idx, targets=None):
+    def forward(self, idx, targets=None) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         device = idx.device
         b, t = idx.size()
         pos = torch.arange(0, t, dtype=torch.long, device=device)
@@ -94,6 +105,9 @@ class NanoTextLM(nn.Module):
         return logits, loss
 
     def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
+        """
+        Generate text using autoregressive sampling (legacy non-streaming).
+        """
         for _ in range(max_new_tokens):
             idx_cond = idx if idx.size(1) <= self.config.max_seq_len else idx[:, -self.config.max_seq_len:]
             logits, _ = self(idx_cond)
@@ -109,7 +123,7 @@ class NanoTextLM(nn.Module):
     @torch.no_grad()
     def generate_stream(self, idx, max_new_tokens, temperature=1.0, top_k=None):
         """
-        Yields tokens one by one as they are generated.
+        Yields tokens one by one as they are generated for streaming applications.
         """
         for _ in range(max_new_tokens):
             idx_cond = idx if idx.size(1) <= self.config.max_seq_len else idx[:, -self.config.max_seq_len:]

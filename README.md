@@ -37,7 +37,7 @@ Download and process the OpenWebText subset:
 python scripts/process_data.py
 
 # 2. Train Tokenizer
-python src/tokenizer.py
+python scripts/train_tokenizer.py
 
 # 3. Tokenize Data (Text to Binary)
 python scripts/tokenize_data.py
