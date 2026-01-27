@@ -60,6 +60,7 @@ def seed_everything(seed=42):
 def train():
     parser = argparse.ArgumentParser()
     parser.add_argument('--demo', action='store_true', help='Run in demo mode (small model, shakespeare config)')
+    parser.add_argument('--resume', type=str, default=None, help='Path to checkpoint to resume from')
     args = parser.parse_args()
 
     # Paths
@@ -100,15 +101,6 @@ def train():
         print(f"Dataset not found at {data_path}. Please run data processing scripts first.")
         return
 
-    # WandB Init
-    if t_conf.wandb_project:
-        print(f"Initializing WandB project: {t_conf.wandb_project}")
-        wandb.init(
-            project=t_conf.wandb_project, 
-            name=t_conf.wandb_run_name or f"run_{int(time.time())}",
-            config={**vars(m_conf), **vars(t_conf)}
-        )
-
     print("Preparing datasets...")
     train_dataset = TextDataset(data_path, m_conf.max_seq_len, split='train')
     val_dataset = TextDataset(data_path, m_conf.max_seq_len, split='val')
@@ -139,10 +131,42 @@ def train():
     optimizer = model.configure_optimizers(t_conf.weight_decay, t_conf.learning_rate, t_conf.device.type)
     scaler = torch.amp.GradScaler(enabled=(t_conf.device.type == 'cuda'))
 
-    # Training Loop
-    model.train()
+    # Resume Logic
     iter_num = 0
     best_val_loss = 1e9
+    
+    if args.resume:
+        if os.path.exists(args.resume):
+            print(f"Resuming from checkpoint: {args.resume}")
+            checkpoint = torch.load(args.resume, map_location=t_conf.device)
+            
+            # Handle both raw state_dict (legacy) and full checkpoint
+            if 'model' in checkpoint:
+                model.load_state_dict(checkpoint['model'])
+                optimizer.load_state_dict(checkpoint['optimizer'])
+                if 'scaler' in checkpoint: scaler.load_state_dict(checkpoint['scaler'])
+                iter_num = checkpoint.get('iter_num', 0)
+                best_val_loss = checkpoint.get('best_val_loss', 1e9)
+                print(f"Resumed at step {iter_num} with val loss {best_val_loss:.4f}")
+            else:
+                model.load_state_dict(checkpoint)
+                print("Loaded legacy model weights only. Resetting optimizer/steps.")
+        else:
+            print(f"Checkpoint {args.resume} not found. Starting from scratch.")
+
+    # WandB Init
+    if t_conf.wandb_project:
+        print(f"Initializing WandB project: {t_conf.wandb_project}")
+        wandb.init(
+            project=t_conf.wandb_project, 
+            name=t_conf.wandb_run_name or f"run_{int(time.time())}",
+            config={**vars(m_conf), **vars(t_conf)},
+            resume="allow",
+            id=t_conf.wandb_run_name if args.resume else None
+        )
+
+    # Training Loop
+    model.train()
     t0 = time.time()
     
     print(f"Starting training with Gradient Accumulation = {t_conf.gradient_accumulation_steps}")
@@ -208,24 +232,10 @@ def train():
                             "train/eval_loss": losses['train']
                         }, step=iter_num)
                     
-                                    if losses['val'] < best_val_loss:
-                                        best_val_loss = losses['val']
-                                        os.makedirs(t_conf.output_dir, exist_ok=True)
-                                        print(f"Saving best model (val_loss {best_val_loss:.4f})")
-                                        checkpoint = {
-                                            'model': model.state_dict(),
-                                            'optimizer': optimizer.state_dict(),
-                                            'scaler': scaler.state_dict(),
-                                            'iter_num': iter_num,
-                                            'best_val_loss': best_val_loss,
-                                            'config': vars(m_conf)
-                                        }
-                                        torch.save(checkpoint, os.path.join(t_conf.output_dir, "best_model.pt"))
-                                
-                                iter_num += 1
-                    
-                        # Save final
+                    if losses['val'] < best_val_loss:
+                        best_val_loss = losses['val']
                         os.makedirs(t_conf.output_dir, exist_ok=True)
+                        print(f"Saving best model (val_loss {best_val_loss:.4f})")
                         checkpoint = {
                             'model': model.state_dict(),
                             'optimizer': optimizer.state_dict(),
@@ -234,8 +244,23 @@ def train():
                             'best_val_loss': best_val_loss,
                             'config': vars(m_conf)
                         }
-                        torch.save(checkpoint, os.path.join(t_conf.output_dir, "final_model.pt"))
-                        print("Training complete.")
+                        torch.save(checkpoint, os.path.join(t_conf.output_dir, "best_model.pt"))
+                
+                iter_num += 1
+
+    # Save final
+    os.makedirs(t_conf.output_dir, exist_ok=True)
+    checkpoint = {
+        'model': model.state_dict(),
+        'optimizer': optimizer.state_dict(),
+        'scaler': scaler.state_dict(),
+        'iter_num': iter_num,
+        'best_val_loss': best_val_loss,
+        'config': vars(m_conf)
+    }
+    torch.save(checkpoint, os.path.join(t_conf.output_dir, "final_model.pt"))
+    print("Training complete.")
+
 if __name__ == "__main__":
     seed_everything(1337)
     train()
