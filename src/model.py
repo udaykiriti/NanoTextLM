@@ -5,11 +5,6 @@ import math
 from typing import Optional, Tuple
 
 class RMSNorm(nn.Module):
-    """
-    Root Mean Square Layer Normalization (RMSNorm).
-    More numerically stable and slightly faster than LayerNorm.
-    Used in LLaMA, PaLM, etc.
-    """
     def __init__(self, dim: int, eps: float = 1e-5):
         super().__init__()
         self.eps = eps
@@ -22,24 +17,79 @@ class RMSNorm(nn.Module):
     def _norm(self, x):
         return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
 
+def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
+    freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
+    t = torch.arange(end, device=freqs.device)  # type: ignore
+    freqs = torch.outer(t, freqs).float()  # type: ignore
+    freqs_cos = torch.cos(freqs)  # real part
+    freqs_sin = torch.sin(freqs)  # imaginary part
+    return freqs_cos, freqs_sin
+
+def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):
+    ndim = x.ndim
+    assert 0 <= 1 < ndim
+    assert freqs_cis.shape == (x.shape[1], x.shape[-1])
+    shape = [d if i == 1 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
+    return freqs_cis.view(*shape)
+
+def apply_rotary_emb(xq: torch.Tensor, xk: torch.Tensor, freqs_cos: torch.Tensor, freqs_sin: torch.Tensor):
+    # xq.shape = [B, T, H, D] -> We need to handle this shape carefully
+    # Usually RoPE is applied on the head dimension.
+    # Our q/k shape in attention is [B, T, n_heads, d_head] after transpose?
+    # No, usually [B, n_heads, T, d_head] for standard attention, but we transpose.
+    # Let's check CausalSelfAttention logic below.
+    
+    # xq: [B, T, n_heads, d_head]
+    
+    # Reshape for rotation (pairs)
+    xq_r, xq_i = xq.float().reshape(xq.shape[:-1] + (-1, 2)).unbind(-1)
+    xk_r, xk_i = xk.float().reshape(xk.shape[:-1] + (-1, 2)).unbind(-1)
+    
+    # Reshape freqs for broadcast
+    # freqs_cos: [T, d_head/2] -> [1, T, 1, d_head/2]
+    freqs_cos = reshape_for_broadcast(freqs_cos, xq_r)
+    freqs_sin = reshape_for_broadcast(freqs_sin, xq_r)
+    
+    # Apply rotation
+    xq_out_r = xq_r * freqs_cos - xq_i * freqs_sin
+    xq_out_i = xq_r * freqs_sin + xq_i * freqs_cos
+    xk_out_r = xk_r * freqs_cos - xk_i * freqs_sin
+    xk_out_i = xk_r * freqs_sin + xk_i * freqs_cos
+    
+    # Stack back
+    xq_out = torch.stack([xq_out_r, xq_out_i], dim=-1).flatten(3)
+    xk_out = torch.stack([xk_out_r, xk_out_i], dim=-1).flatten(3)
+    
+    return xq_out.type_as(xq), xk_out.type_as(xk)
+
+
 class CausalSelfAttention(nn.Module):
     def __init__(self, config):
         super().__init__()
         assert config.d_model % config.n_heads == 0
-        # bias=False is a modern best practice (LLaMA, PaLM) to save parameters/compute
         self.c_attn = nn.Linear(config.d_model, 3 * config.d_model, bias=False)
         self.c_proj = nn.Linear(config.d_model, config.d_model, bias=False)
         self.n_heads = config.n_heads
         self.d_head = config.d_model // config.n_heads
         self.dropout = nn.Dropout(config.dropout)
         
-    def forward(self, x):
+    def forward(self, x, freqs_cos, freqs_sin):
         B, T, C = x.size()
         qkv = self.c_attn(x)
         q, k, v = qkv.split(C, dim=2)
-        q = q.view(B, T, self.n_heads, self.d_head).transpose(1, 2)
-        k = k.view(B, T, self.n_heads, self.d_head).transpose(1, 2)
-        v = v.view(B, T, self.n_heads, self.d_head).transpose(1, 2)
+        
+        # Reshape to [B, T, n_heads, d_head]
+        q = q.view(B, T, self.n_heads, self.d_head)
+        k = k.view(B, T, self.n_heads, self.d_head)
+        v = v.view(B, T, self.n_heads, self.d_head)
+        
+        # Apply RoPE
+        q, k = apply_rotary_emb(q, k, freqs_cos, freqs_sin)
+        
+        # Transpose for Attention: [B, n_heads, T, d_head]
+        q = q.transpose(1, 2)
+        k = k.transpose(1, 2)
+        v = v.transpose(1, 2)
         
         # Flash Attention
         y = F.scaled_dot_product_attention(
@@ -66,14 +116,13 @@ class MLP(nn.Module):
 class Block(nn.Module):
     def __init__(self, config):
         super().__init__()
-        # Replace LayerNorm with RMSNorm
         self.ln_1 = RMSNorm(config.d_model)
         self.attn = CausalSelfAttention(config)
         self.ln_2 = RMSNorm(config.d_model)
         self.mlp = MLP(config)
 
-    def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
+    def forward(self, x, freqs_cos, freqs_sin):
+        x = x + self.attn(self.ln_1(x), freqs_cos, freqs_sin)
         x = x + self.mlp(self.ln_2(x))
         return x
 
@@ -83,7 +132,7 @@ class NanoTextLM(nn.Module):
         self.config = config
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.d_model),
-            wpe = nn.Embedding(config.max_seq_len, config.d_model),
+            # wpe removed (Absolute Positional Embedding)
             drop = nn.Dropout(config.dropout),
             h = nn.ModuleList([Block(config) for _ in range(config.n_layers)]),
             ln_f = RMSNorm(config.d_model),
@@ -91,63 +140,55 @@ class NanoTextLM(nn.Module):
         self.lm_head = nn.Linear(config.d_model, config.vocab_size, bias=False)
         self.transformer.wte.weight = self.lm_head.weight
         self.apply(self._init_weights)
+        
+        # Precompute RoPE frequencies
+        head_dim = config.d_model // config.n_heads
+        freqs_cos, freqs_sin = precompute_freqs_cis(head_dim, config.max_seq_len * 2) # *2 margin
+        self.register_buffer("freqs_cos", freqs_cos, persistent=False)
+        self.register_buffer("freqs_sin", freqs_sin, persistent=False)
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
-            # Biases are generally disabled, but if any remain (e.g. in some layers if configured), zero them
             if module.bias is not None: torch.nn.init.zeros_(module.bias)
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
         elif isinstance(module, RMSNorm):
-             # RMSNorm has no bias, just weight
              torch.nn.init.ones_(module.weight)
 
     def configure_optimizers(self, weight_decay, learning_rate, device_type):
-        """
-        Separate parameters into those that experience weight decay (matmuls, embeddings)
-        and those that do not (biases, layernorms).
-        """
         param_dict = {pn: p for pn, p in self.named_parameters()}
-        
-        # Filter out parameters that do not require grad
         param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
-        
-        # Create groups
         decay_params = [p for n, p in param_dict.items() if p.dim() >= 2]
         nodecay_params = [p for n, p in param_dict.items() if p.dim() < 2]
-        
         optim_groups = [
             {'params': decay_params, 'weight_decay': weight_decay},
             {'params': nodecay_params, 'weight_decay': 0.0}
         ]
         
-        num_decay_params = sum(p.numel() for p in decay_params)
-        num_nodecay_params = sum(p.numel() for p in nodecay_params)
-        print(f"Num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
-        print(f"Num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters")
-        
-        # Create AdamW optimizer
         use_fused = (device_type == 'cuda')
         extra_args = dict(fused=True) if use_fused else dict()
-        print(f"Using AdamW optimizer (fused={use_fused})")
-        
         optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=(0.9, 0.99), **extra_args)
         return optimizer
 
     def forward(self, idx, targets=None) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         device = idx.device
         b, t = idx.size()
-        pos = torch.arange(0, t, dtype=torch.long, device=device)
-        x = self.transformer.drop(self.transformer.wte(idx) + self.transformer.wpe(pos))
         
-        # Gradient Checkpointing (saves VRAM by recomputing activations during backward pass)
+        # Slice RoPE frequencies
+        freqs_cos = self.freqs_cos[:t]
+        freqs_sin = self.freqs_sin[:t]
+        
+        # Input Embedding (No Positional Embedding added here!)
+        x = self.transformer.drop(self.transformer.wte(idx))
+        
+        # Gradient Checkpointing
         if self.config.use_gradient_checkpointing and self.training:
             for block in self.transformer.h:
-                x = torch.utils.checkpoint.checkpoint(block, x, use_reentrant=False)
+                x = torch.utils.checkpoint.checkpoint(block, x, freqs_cos, freqs_sin, use_reentrant=False)
         else:
             for block in self.transformer.h: 
-                x = block(x)
+                x = block(x, freqs_cos, freqs_sin)
                 
         x = self.transformer.ln_f(x)
         
@@ -160,7 +201,6 @@ class NanoTextLM(nn.Module):
         return logits, loss
 
     def _sample_top_p(self, logits, temperature=1.0, top_k=None, top_p=None):
-        # Greedy decoding for temp -> 0
         if temperature < 1e-5:
             return torch.argmax(logits[:, -1, :], dim=-1, keepdim=True)
 
