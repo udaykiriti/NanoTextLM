@@ -1,17 +1,37 @@
-# Use PyTorch base image with CUDA support
+# Stage 1: Builder
+FROM pytorch/pytorch:2.1.2-cuda12.1-cudnn8-runtime AS builder
+
+WORKDIR /app
+
+# Install dependencies efficiently (cached layer)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Stage 2: Runner (Slimmer final image, though PyTorch is dominant size)
 FROM pytorch/pytorch:2.1.2-cuda12.1-cudnn8-runtime
 
 WORKDIR /app
 
-# Install dependencies
+# Create a non-root user for security
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Copy installed packages from builder (optional if using same base, mainly for logical separation)
+# In this simple case, we just installed in base. 
+# But let's copy source code.
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy source code
 COPY . .
 
-# Expose port for the Web App
+# Ownership
+RUN chown -R appuser:appuser /app
+USER appuser
+
+# Optimizations
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
 EXPOSE 5000
 
-# Default command: Run the Web App
 CMD ["python", "src/app.py"]

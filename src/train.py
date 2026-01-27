@@ -90,8 +90,8 @@ def train():
     # Device setup
     if t_conf.device.type == 'cuda':
         print(f"Using GPU: {torch.cuda.get_device_name(0)}")
-        torch.backends.cuda.matmul.allow_tf32 = True 
-        torch.backends.cudnn.allow_tf32 = True 
+        # Enable TF32 for huge speedups on Ampere+ (A100, 3090, 4090, etc.)
+        torch.set_float32_matmul_precision('high')
     else:
         print(f"Using Device: {t_conf.device}")
 
