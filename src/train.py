@@ -208,19 +208,34 @@ def train():
                             "train/eval_loss": losses['train']
                         }, step=iter_num)
                     
-                    if losses['val'] < best_val_loss:
-                        best_val_loss = losses['val']
+                                    if losses['val'] < best_val_loss:
+                                        best_val_loss = losses['val']
+                                        os.makedirs(t_conf.output_dir, exist_ok=True)
+                                        print(f"Saving best model (val_loss {best_val_loss:.4f})")
+                                        checkpoint = {
+                                            'model': model.state_dict(),
+                                            'optimizer': optimizer.state_dict(),
+                                            'scaler': scaler.state_dict(),
+                                            'iter_num': iter_num,
+                                            'best_val_loss': best_val_loss,
+                                            'config': vars(m_conf)
+                                        }
+                                        torch.save(checkpoint, os.path.join(t_conf.output_dir, "best_model.pt"))
+                                
+                                iter_num += 1
+                    
+                        # Save final
                         os.makedirs(t_conf.output_dir, exist_ok=True)
-                        print(f"Saving best model (val_loss {best_val_loss:.4f})")
-                        torch.save(model.state_dict(), os.path.join(t_conf.output_dir, "best_model.pt"))
-                
-                iter_num += 1
-
-    # Save final
-    os.makedirs(t_conf.output_dir, exist_ok=True)
-    torch.save(model.state_dict(), os.path.join(t_conf.output_dir, "final_model.pt"))
-    print("Training complete.")
-
+                        checkpoint = {
+                            'model': model.state_dict(),
+                            'optimizer': optimizer.state_dict(),
+                            'scaler': scaler.state_dict(),
+                            'iter_num': iter_num,
+                            'best_val_loss': best_val_loss,
+                            'config': vars(m_conf)
+                        }
+                        torch.save(checkpoint, os.path.join(t_conf.output_dir, "final_model.pt"))
+                        print("Training complete.")
 if __name__ == "__main__":
     seed_everything(1337)
     train()
