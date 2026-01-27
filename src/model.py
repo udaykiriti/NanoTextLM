@@ -140,7 +140,15 @@ class NanoTextLM(nn.Module):
         b, t = idx.size()
         pos = torch.arange(0, t, dtype=torch.long, device=device)
         x = self.transformer.drop(self.transformer.wte(idx) + self.transformer.wpe(pos))
-        for block in self.transformer.h: x = block(x)
+        
+        # Gradient Checkpointing (saves VRAM by recomputing activations during backward pass)
+        if self.config.use_gradient_checkpointing and self.training:
+            for block in self.transformer.h:
+                x = torch.utils.checkpoint.checkpoint(block, x, use_reentrant=False)
+        else:
+            for block in self.transformer.h: 
+                x = block(x)
+                
         x = self.transformer.ln_f(x)
         
         loss = None

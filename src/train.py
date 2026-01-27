@@ -114,9 +114,13 @@ def train():
     val_dataset = TextDataset(data_path, m_conf.max_seq_len, split='val')
     
     train_loader = DataLoader(train_dataset, batch_size=t_conf.batch_size, shuffle=True, 
-                            num_workers=4 if t_conf.device.type == 'cuda' else 0, pin_memory=True)
+                            num_workers=4 if t_conf.device.type == 'cuda' else 0, 
+                            pin_memory=True, 
+                            persistent_workers=True if t_conf.device.type == 'cuda' else False)
     val_loader = DataLoader(val_dataset, batch_size=t_conf.batch_size, shuffle=False, 
-                          num_workers=4 if t_conf.device.type == 'cuda' else 0, pin_memory=True)
+                          num_workers=4 if t_conf.device.type == 'cuda' else 0, 
+                          pin_memory=True,
+                          persistent_workers=True if t_conf.device.type == 'cuda' else False)
 
     if len(train_dataset) == 0:
         print("Training dataset is empty.")

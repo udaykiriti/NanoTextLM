@@ -10,6 +10,8 @@ class ModelConfig:
     n_heads: int = 12
     max_seq_len: int = 1024
     dropout: float = 0.1
+    # Optimization
+    use_gradient_checkpointing: bool = False # Lowers VRAM usage at cost of slight compute
 
 @dataclass
 class NanoConfig(ModelConfig):
