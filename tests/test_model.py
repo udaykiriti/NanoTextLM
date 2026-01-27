@@ -24,6 +24,9 @@ def test_model_initialization(model_config):
     assert model is not None
     # Check parameter count > 0
     assert sum(p.numel() for p in model.parameters()) > 0
+    # Check if RMSNorm is used (just checking strict type might fail if we imported class locally, but logic holds)
+    from model import RMSNorm
+    assert isinstance(model.transformer.ln_f, RMSNorm)
 
 def test_forward_pass(model_config):
     model = NanoTextLM(model_config)

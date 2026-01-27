@@ -4,15 +4,31 @@ import torch.nn.functional as F
 import math
 from typing import Optional, Tuple
 
+class RMSNorm(nn.Module):
+    """
+    Root Mean Square Layer Normalization (RMSNorm).
+    More numerically stable and slightly faster than LayerNorm.
+    Used in LLaMA, PaLM, etc.
+    """
+    def __init__(self, dim: int, eps: float = 1e-5):
+        super().__init__()
+        self.eps = eps
+        self.weight = nn.Parameter(torch.ones(dim))
+
+    def forward(self, x):
+        output = self._norm(x.float()).type_as(x)
+        return output * self.weight
+
+    def _norm(self, x):
+        return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
+
 class CausalSelfAttention(nn.Module):
-    """
-    Multi-head Causal Self-Attention with Flash Attention support.
-    """
     def __init__(self, config):
         super().__init__()
         assert config.d_model % config.n_heads == 0
-        self.c_attn = nn.Linear(config.d_model, 3 * config.d_model)
-        self.c_proj = nn.Linear(config.d_model, config.d_model)
+        # bias=False is a modern best practice (LLaMA, PaLM) to save parameters/compute
+        self.c_attn = nn.Linear(config.d_model, 3 * config.d_model, bias=False)
+        self.c_proj = nn.Linear(config.d_model, config.d_model, bias=False)
         self.n_heads = config.n_heads
         self.d_head = config.d_model // config.n_heads
         self.dropout = nn.Dropout(config.dropout)
@@ -25,7 +41,7 @@ class CausalSelfAttention(nn.Module):
         k = k.view(B, T, self.n_heads, self.d_head).transpose(1, 2)
         v = v.view(B, T, self.n_heads, self.d_head).transpose(1, 2)
         
-        # Flash Attention (PyTorch 2.0+)
+        # Flash Attention
         y = F.scaled_dot_product_attention(
             q, k, v, 
             attn_mask=None, 
@@ -39,9 +55,9 @@ class CausalSelfAttention(nn.Module):
 class MLP(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.c_fc = nn.Linear(config.d_model, 4 * config.d_model)
+        self.c_fc = nn.Linear(config.d_model, 4 * config.d_model, bias=False)
         self.gelu = nn.GELU()
-        self.c_proj = nn.Linear(4 * config.d_model, config.d_model)
+        self.c_proj = nn.Linear(4 * config.d_model, config.d_model, bias=False)
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
@@ -50,9 +66,10 @@ class MLP(nn.Module):
 class Block(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.ln_1 = nn.LayerNorm(config.d_model)
+        # Replace LayerNorm with RMSNorm
+        self.ln_1 = RMSNorm(config.d_model)
         self.attn = CausalSelfAttention(config)
-        self.ln_2 = nn.LayerNorm(config.d_model)
+        self.ln_2 = RMSNorm(config.d_model)
         self.mlp = MLP(config)
 
     def forward(self, x):
@@ -61,9 +78,6 @@ class Block(nn.Module):
         return x
 
 class NanoTextLM(nn.Module):
-    """
-    NanoTextLM: A lightweight GPT-style language model.
-    """
     def __init__(self, config):
         super().__init__()
         self.config = config
@@ -72,7 +86,7 @@ class NanoTextLM(nn.Module):
             wpe = nn.Embedding(config.max_seq_len, config.d_model),
             drop = nn.Dropout(config.dropout),
             h = nn.ModuleList([Block(config) for _ in range(config.n_layers)]),
-            ln_f = nn.LayerNorm(config.d_model),
+            ln_f = RMSNorm(config.d_model),
         ))
         self.lm_head = nn.Linear(config.d_model, config.vocab_size, bias=False)
         self.transformer.wte.weight = self.lm_head.weight
@@ -81,12 +95,13 @@ class NanoTextLM(nn.Module):
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            # Biases are generally disabled, but if any remain (e.g. in some layers if configured), zero them
             if module.bias is not None: torch.nn.init.zeros_(module.bias)
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
-        elif isinstance(module, nn.LayerNorm):
-            torch.nn.init.zeros_(module.bias)
-            torch.nn.init.ones_(module.weight)
+        elif isinstance(module, RMSNorm):
+             # RMSNorm has no bias, just weight
+             torch.nn.init.ones_(module.weight)
 
     def forward(self, idx, targets=None) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         device = idx.device
@@ -105,28 +120,18 @@ class NanoTextLM(nn.Module):
         return logits, loss
 
     def _sample_top_p(self, logits, temperature=1.0, top_k=None, top_p=None):
-        """
-        Helper function for sampling with Temperature, Top-K and Top-P (Nucleus) support.
-        """
         logits = logits[:, -1, :] / temperature
         
-        # Top-K
         if top_k is not None:
             v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
             logits[logits < v[:, [-1]]] = -float('Inf')
             
-        # Top-P (Nucleus Sampling)
         if top_p is not None and top_p < 1.0:
             sorted_logits, sorted_indices = torch.sort(logits, descending=True)
             cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
-
-            # Remove tokens with cumulative probability above the threshold
             sorted_indices_to_remove = cumulative_probs > top_p
-            
-            # Shift the indices to the right to keep also the first token above the threshold
             sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
             sorted_indices_to_remove[..., 0] = 0
-
             indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
             logits[indices_to_remove] = -float('Inf')
 
@@ -135,9 +140,6 @@ class NanoTextLM(nn.Module):
         return idx_next
 
     def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None, top_p=None):
-        """
-        Generate text using autoregressive sampling (legacy non-streaming).
-        """
         for _ in range(max_new_tokens):
             idx_cond = idx if idx.size(1) <= self.config.max_seq_len else idx[:, -self.config.max_seq_len:]
             logits, _ = self(idx_cond)
@@ -147,9 +149,6 @@ class NanoTextLM(nn.Module):
 
     @torch.no_grad()
     def generate_stream(self, idx, max_new_tokens, temperature=1.0, top_k=None, top_p=None):
-        """
-        Yields tokens one by one as they are generated for streaming applications.
-        """
         for _ in range(max_new_tokens):
             idx_cond = idx if idx.size(1) <= self.config.max_seq_len else idx[:, -self.config.max_seq_len:]
             logits, _ = self(idx_cond)
