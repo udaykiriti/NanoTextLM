@@ -12,3 +12,4 @@ uvicorn
 pydantic
 rich
 pytest
+huggingface_hub
