@@ -105,13 +105,20 @@ class CausalSelfAttention(nn.Module):
 class MLP(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.c_fc = nn.Linear(config.d_model, 4 * config.d_model, bias=False)
-        self.gelu = nn.GELU()
-        self.c_proj = nn.Linear(4 * config.d_model, config.d_model, bias=False)
+        # SwiGLU variant
+        # We keep hidden dim same as standard transformer (4*d) for simplicity, 
+        # though LLaMA uses 2/3 * 4*d to save params.
+        hidden_dim = 4 * config.d_model
+        
+        self.w1 = nn.Linear(config.d_model, hidden_dim, bias=False) # Gate
+        self.w2 = nn.Linear(config.d_model, hidden_dim, bias=False) # Feat
+        self.c_proj = nn.Linear(hidden_dim, config.d_model, bias=False) # Output
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
-        return self.dropout(self.c_proj(self.gelu(self.c_fc(x))))
+        # SwiGLU: (SiLU(Gate) * Feat) -> Output
+        x = F.silu(self.w1(x)) * self.w2(x)
+        return self.dropout(self.c_proj(x))
 
 class Block(nn.Module):
     def __init__(self, config):
