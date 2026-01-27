@@ -25,5 +25,8 @@ clean:
 test:
 	pytest tests/
 
+evaluate:
+	python scripts/evaluate.py
+
 docker-build:
 	docker build -t nanotextlm .
