@@ -44,14 +44,34 @@ def estimate_loss(model, dataloaders, device, eval_iters=50):
     model.train()
     return out
 
+import argparse
+
 def train():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--demo', action='store_true', help='Run in demo mode (small model, shakespeare config)')
+    args = parser.parse_args()
+
     # Paths
     PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     data_path = os.path.join(PROJECT_ROOT, "data", "processed", "train.bin")
     
     # Config
-    m_conf = ModelConfig()
-    t_conf = TrainingConfig()
+    if args.demo:
+        print("Running in DEMO mode (NanoConfig)")
+        from config import NanoConfig
+        m_conf = NanoConfig()
+        t_conf = TrainingConfig(
+            batch_size=32, # Larger batch size for smaller model
+            max_epochs=20, # More epochs for small dataset
+            eval_every=50,
+            save_every=500,
+            learning_rate=1e-3,
+            warmup_iters=50,
+            lr_decay_iters=2000
+        )
+    else:
+        m_conf = ModelConfig()
+        t_conf = TrainingConfig()
     
     # Device setup
     if t_conf.device.type == 'cuda':

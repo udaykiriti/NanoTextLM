@@ -10,6 +10,16 @@ class ModelConfig:
     max_seq_len: int = 1024
     dropout: float = 0.1
 
+@dataclass
+class NanoConfig(ModelConfig):
+    """Smaller config for testing or CPU training"""
+    vocab_size: int = 5000  # Matches shakespeare tokenizer
+    d_model: int = 384
+    n_layers: int = 6
+    n_heads: int = 6
+    max_seq_len: int = 256
+    dropout: float = 0.2
+
 
 @dataclass
 class TrainingConfig:
