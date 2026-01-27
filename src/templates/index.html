@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TinyTechLM</title>
+    <style>
+        body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f4f4f9; }
+        .container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        h1 { color: #333; text-align: center; }
+        #chat-box { border: 1px solid #ddd; padding: 10px; height: 300px; overflow-y: auto; margin-bottom: 20px; border-radius: 4px; background: #fafafa; }
+        .message { margin-bottom: 10px; padding: 8px; border-radius: 4px; }
+        .user-msg { background-color: #e3f2fd; text-align: right; }
+        .bot-msg { background-color: #f5f5f5; text-align: left; }
+        .input-group { display: flex; gap: 10px; }
+        input[type="text"] { flex-grow: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+        button { padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #ccc; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>TinyTechLM</h1>
+        <div id="chat-box"></div>
+        <div class="input-group">
+            <input type="text" id="user-input" placeholder="Type a message..." onkeypress="handleKey(event)">
+            <button onclick="sendMessage()" id="send-btn">Send</button>
+        </div>
+    </div>
+
+    <script>
+        const chatBox = document.getElementById('chat-box');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+
+        function handleKey(event) {
+            if (event.key === 'Enter') sendMessage();
+        }
+
+        async function sendMessage() {
+            const text = userInput.value.trim();
+            if (!text) return;
+
+            appendMessage("User", text, "user-msg");
+            userInput.value = '';
+            setLoading(true);
+
+            try {
+                const response = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: text })
+                });
+                
+                const data = await response.json();
+                if (data.error) {
+                    appendMessage("Error", data.error, "bot-msg");
+                } else {
+                    appendMessage("TinyTechLM", data.response, "bot-msg");
+                }
+            } catch (err) {
+                appendMessage("Error", "Failed to connect to server.", "bot-msg");
+            }
+            setLoading(false);
+        }
+
+        function appendMessage(sender, text, className) {
+            const div = document.createElement('div');
+            div.className = `message ${className}`;
+            div.innerHTML = `<strong>${sender}:</strong> ${text}`;
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function setLoading(isLoading) {
+            sendBtn.disabled = isLoading;
+            sendBtn.innerText = isLoading ? "..." : "Send";
+        }
+    </script>
+</body>
+</html>
