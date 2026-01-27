@@ -1,33 +1,79 @@
 # NanoTextLM
 
-NanoTextLM is a lightweight language model trained from scratch on the OpenWebText dataset. This project demonstrates the implementation of a decoder-only Transformer architecture, tokenizer training, and the complete training pipeline using PyTorch.
+NanoTextLM is a lightweight, optimized language model trained from scratch on the OpenWebText dataset. It features a GPT-style decoder-only Transformer architecture with modern optimizations like Flash Attention and streaming inference.
 
-## Dataset
+## Features
 
-This project relies on a subset of the OpenWebText dataset.
-Source: OpenWebText train-00074-of-00080.parquet
-
-The dataset file should be placed at: data/raw/openwebtext/train-00074-of-00080.parquet
+- **Architecture:** 12-layer, 12-head Transformer (~85M parameters).
+- **Optimization:** Flash Attention (PyTorch 2.0), Automatic Mixed Precision (AMP), Cosine Learning Rate Schedule.
+- **Inference:** Streaming generation via CLI (Rich UI) and Web API (SSE).
+- **UI:** Modern Dark Mode Web Interface.
+- **Deployment:** Docker support.
 
 ## Project Structure
 
-- src/: Source code for the model, training, and inference.
-- scripts/: Data processing and utility scripts.
-- data/: Dataset storage (raw and processed).
+- `src/`: Source code (Model, Training, Inference, App).
+- `scripts/`: Data processing scripts.
+- `data/`: Dataset storage.
+- `tests/`: Unit tests.
 
 ## Usage
 
-1. Install dependencies:
-   pip install -r requirements.txt
+### 1. Installation
 
-2. Process data:
-   python scripts/process_data.py
+```bash
+pip install -r requirements.txt
+```
 
-3. Train tokenizer:
-   python src/tokenizer.py
+### 2. Data Preparation
 
-4. Train model:
-   python src/train.py
+Download and process the OpenWebText subset:
 
-5. Run inference:
-   python src/inference.py
+```bash
+# 1. Process Parquet to Text
+python scripts/process_data.py
+
+# 2. Train Tokenizer
+python src/tokenizer.py
+
+# 3. Tokenize Data (Text to Binary)
+python scripts/tokenize_data.py
+```
+
+### 3. Training
+
+Train the model with optimizations (CUDA recommended):
+
+```bash
+python src/train.py
+```
+
+### 4. Inference
+
+**CLI (Streaming):**
+```bash
+python src/inference.py
+```
+
+**Web App (Streaming UI):**
+```bash
+python src/app.py
+```
+Open [http://localhost:5000](http://localhost:5000) in your browser.
+
+## Testing
+
+Run unit tests to verify the architecture:
+
+```bash
+pytest tests/
+```
+
+## Docker
+
+Build and run the container:
+
+```bash
+docker build -t nanotextlm .
+docker run -p 5000:5000 nanotextlm
+```

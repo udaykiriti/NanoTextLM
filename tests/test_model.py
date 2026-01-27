@@ -1,0 +1,54 @@
+import sys
+import os
+import torch
+import pytest
+
+# Add src to path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
+
+from model import NanoTextLM
+from config import ModelConfig
+
+@pytest.fixture
+def model_config():
+    return ModelConfig(
+        vocab_size=1000,
+        d_model=64,
+        n_layers=2,
+        n_heads=2,
+        max_seq_len=32
+    )
+
+def test_model_initialization(model_config):
+    model = NanoTextLM(model_config)
+    assert model is not None
+    # Check parameter count > 0
+    assert sum(p.numel() for p in model.parameters()) > 0
+
+def test_forward_pass(model_config):
+    model = NanoTextLM(model_config)
+    batch_size = 2
+    seq_len = 10
+    idx = torch.randint(0, model_config.vocab_size, (batch_size, seq_len))
+    
+    logits, loss = model(idx)
+    
+    # Check shape: [batch, 1, vocab_size] (inference mode)
+    assert logits.shape == (batch_size, 1, model_config.vocab_size)
+    assert loss is None
+
+def test_forward_pass_with_targets(model_config):
+    model = NanoTextLM(model_config)
+    batch_size = 2
+    seq_len = 10
+    idx = torch.randint(0, model_config.vocab_size, (batch_size, seq_len))
+    targets = torch.randint(0, model_config.vocab_size, (batch_size, seq_len))
+    
+    logits, loss = model(idx, targets=targets)
+    
+    assert logits.shape == (batch_size, seq_len, model_config.vocab_size)
+    assert loss is not None
+    assert isinstance(loss.item(), float)
+
+def test_generate_stream(model_config):
+    model = NanoTextLM(model_config)

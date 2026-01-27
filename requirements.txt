@@ -8,3 +8,5 @@ fastparquet
 tqdm
 wandb
 flask
+rich
+pytest

@@ -4,7 +4,7 @@ import numpy as np
 import os
 
 class TextDataset(Dataset):
-    def __init__(self, data_path, block_size):
+    def __init__(self, data_path, block_size, split='train', split_ratio=0.9):
         self.block_size = block_size
         
         if not os.path.exists(data_path):
@@ -17,9 +17,17 @@ class TextDataset(Dataset):
         # Load data using memory mapping
         # We assume uint16 because our vocab size is usually < 65535 (50257)
         try:
-            self.data = np.memmap(data_path, dtype=np.uint16, mode='r')
+            raw_data = np.memmap(data_path, dtype=np.uint16, mode='r')
+            total_len = len(raw_data)
+            split_idx = int(total_len * split_ratio)
+            
+            if split == 'train':
+                self.data = raw_data[:split_idx]
+            else:
+                self.data = raw_data[split_idx:]
+                
             self.num_samples = (len(self.data) - 1) // self.block_size
-            print(f"Loaded dataset from {data_path} (Memmap). Tokens: {len(self.data):,}. Samples: {self.num_samples:,}")
+            print(f"Loaded {split} dataset from {data_path}. Tokens: {len(self.data):,}. Samples: {self.num_samples:,}")
         except Exception as e:
             print(f"Error loading memmap: {e}")
             self.data = np.array([], dtype=np.uint16)

@@ -19,7 +19,14 @@ class TrainingConfig:
     weight_decay: float = 0.1
     log_every: int = 10
     save_every: int = 500
+    eval_every: int = 200  # Evaluate every N steps
     output_dir: str = "checkpoints"
+    
+    # Optimization
+    warmup_iters: int = 100
+    lr_decay_iters: int = 5000
+    min_lr: float = 3e-5
+    grad_clip: float = 1.0
 
     # Automatically select GPU if available, else CPU
     device: torch.device = torch.device(
