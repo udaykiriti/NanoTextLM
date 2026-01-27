@@ -1,14 +1,17 @@
 # NanoTextLM
 
+![Python Tests](https://github.com/udaykiriti/NanoTextLM/actions/workflows/tests.yml/badge.svg)
+![Docker Build](https://github.com/udaykiriti/NanoTextLM/actions/workflows/docker.yml/badge.svg)
+
 NanoTextLM is a lightweight, optimized language model trained from scratch on the OpenWebText dataset. It features a GPT-style decoder-only Transformer architecture with modern optimizations like Flash Attention and streaming inference.
 
 ## Features
 
 - **Architecture:** 12-layer, 12-head Transformer (~85M parameters).
-- **Optimization:** Flash Attention (PyTorch 2.0), Automatic Mixed Precision (AMP), Cosine Learning Rate Schedule.
+- **Optimization:** Flash Attention (PyTorch 2.0), `torch.compile`, Fused AdamW, Automatic Mixed Precision (AMP).
 - **Inference:** Streaming generation via CLI (Rich UI) and Web API (SSE).
+- **Ops:** Docker containerization and GitHub Actions CI/CD pipeline.
 - **UI:** Modern Dark Mode Web Interface.
-- **Deployment:** Docker support.
 
 ## Project Structure
 
