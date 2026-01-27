@@ -11,6 +11,7 @@ import time
 import argparse
 import random
 import numpy as np
+import wandb
 
 def get_lr(it, t_conf):
     # 1) linear warmup
@@ -99,6 +100,15 @@ def train():
         print(f"Dataset not found at {data_path}. Please run data processing scripts first.")
         return
 
+    # WandB Init
+    if t_conf.wandb_project:
+        print(f"Initializing WandB project: {t_conf.wandb_project}")
+        wandb.init(
+            project=t_conf.wandb_project, 
+            name=t_conf.wandb_run_name or f"run_{int(time.time())}",
+            config={**vars(m_conf), **vars(t_conf)}
+        )
+
     print("Preparing datasets...")
     train_dataset = TextDataset(data_path, m_conf.max_seq_len, split='train')
     val_dataset = TextDataset(data_path, m_conf.max_seq_len, split='val')
@@ -177,11 +187,25 @@ def train():
                     # Multiply loss back for display
                     loss_val = loss.item() * t_conf.gradient_accumulation_steps
                     print(f"Epoch {epoch+1} | Step {iter_num} | Loss: {loss_val:.4f} | LR: {lr:.2e} | Time: {dt*1000:.2f}ms")
+                    
+                    if wandb.run:
+                        wandb.log({
+                            "train/loss": loss_val,
+                            "train/lr": lr,
+                            "train/step_time_ms": dt*1000,
+                            "epoch": epoch
+                        }, step=iter_num)
 
                 # Evaluation & Checkpointing
                 if iter_num > 0 and iter_num % t_conf.eval_every == 0:
                     losses = estimate_loss(model, {'train': train_loader, 'val': val_loader}, t_conf.device)
                     print(f"Step {iter_num} Evaluation: Train Loss {losses['train']:.4f}, Val Loss {losses['val']:.4f}")
+                    
+                    if wandb.run:
+                        wandb.log({
+                            "val/loss": losses['val'],
+                            "train/eval_loss": losses['train']
+                        }, step=iter_num)
                     
                     if losses['val'] < best_val_loss:
                         best_val_loss = losses['val']

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import torch
+from typing import Optional
 
 @dataclass
 class ModelConfig:
@@ -23,7 +24,7 @@ class NanoConfig(ModelConfig):
 @dataclass
 class TrainingConfig:
     batch_size: int = 8
-    gradient_accumulation_steps: int = 4 # Simulate larger batch size (8*4=32)
+    gradient_accumulation_steps: int = 4
     learning_rate: float = 3e-4
     max_epochs: int = 3
     weight_decay: float = 0.1
@@ -37,6 +38,10 @@ class TrainingConfig:
     lr_decay_iters: int = 5000
     min_lr: float = 3e-5
     grad_clip: float = 1.0
+    
+    # Logging
+    wandb_project: str = "nanotextlm"
+    wandb_run_name: Optional[str] = None
 
     # Automatically select GPU if available, else CPU
     device: torch.device = torch.device(
