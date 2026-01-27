@@ -103,6 +103,38 @@ class NanoTextLM(nn.Module):
              # RMSNorm has no bias, just weight
              torch.nn.init.ones_(module.weight)
 
+    def configure_optimizers(self, weight_decay, learning_rate, device_type):
+        """
+        Separate parameters into those that experience weight decay (matmuls, embeddings)
+        and those that do not (biases, layernorms).
+        """
+        param_dict = {pn: p for pn, p in self.named_parameters()}
+        
+        # Filter out parameters that do not require grad
+        param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
+        
+        # Create groups
+        decay_params = [p for n, p in param_dict.items() if p.dim() >= 2]
+        nodecay_params = [p for n, p in param_dict.items() if p.dim() < 2]
+        
+        optim_groups = [
+            {'params': decay_params, 'weight_decay': weight_decay},
+            {'params': nodecay_params, 'weight_decay': 0.0}
+        ]
+        
+        num_decay_params = sum(p.numel() for p in decay_params)
+        num_nodecay_params = sum(p.numel() for p in nodecay_params)
+        print(f"Num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
+        print(f"Num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters")
+        
+        # Create AdamW optimizer
+        use_fused = (device_type == 'cuda')
+        extra_args = dict(fused=True) if use_fused else dict()
+        print(f"Using AdamW optimizer (fused={use_fused})")
+        
+        optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=(0.9, 0.99), **extra_args)
+        return optimizer
+
     def forward(self, idx, targets=None) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         device = idx.device
         b, t = idx.size()
@@ -120,6 +152,10 @@ class NanoTextLM(nn.Module):
         return logits, loss
 
     def _sample_top_p(self, logits, temperature=1.0, top_k=None, top_p=None):
+        # Greedy decoding for temp -> 0
+        if temperature < 1e-5:
+            return torch.argmax(logits[:, -1, :], dim=-1, keepdim=True)
+
         logits = logits[:, -1, :] / temperature
         
         if top_k is not None:

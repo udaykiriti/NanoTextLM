@@ -131,11 +131,8 @@ def train():
         print("Compiling model with torch.compile...")
         model = torch.compile(model)
 
-    # Optimizer (Fused if available)
-    use_fused = t_conf.device.type == 'cuda'
-    extra_args = dict(fused=True) if use_fused else dict()
-    print(f"Using AdamW optimizer (fused={use_fused})")
-    optimizer = torch.optim.AdamW(model.parameters(), lr=t_conf.learning_rate, weight_decay=t_conf.weight_decay, **extra_args)
+    # Optimizer (Smart Weight Decay)
+    optimizer = model.configure_optimizers(t_conf.weight_decay, t_conf.learning_rate, t_conf.device.type)
     scaler = torch.amp.GradScaler(enabled=(t_conf.device.type == 'cuda'))
 
     # Training Loop
