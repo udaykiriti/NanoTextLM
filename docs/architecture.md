@@ -1,36 +1,28 @@
 # Architecture
 
-NanoTextLM is based on the GPT (Generative Pre-trained Transformer) architecture, specifically a decoder-only Transformer model. It is designed to be lightweight yet efficient, utilizing modern deep learning optimizations.
+NanoTextLM implements a decoder-only Transformer architecture that closely mirrors state-of-the-art models like LLaMA and PaLM.
 
-## Core Components
+## Key Components
 
-### 1. NanoTextLM (The Model)
-The main class `NanoTextLM` orchestrates the model. It consists of:
-- **Embedding Layer (`wte`):** Maps input token IDs to dense vectors.
-- **Positional Embedding (`wpe`):** Adds learnable position information to the token embeddings.
-- **Transformer Blocks (`h`):** A stack of `n_layers` identical layers that process the information.
-- **Layer Normalization (`ln_f`):** Final normalization before the output head.
-- **Language Modeling Head (`lm_head`):** Projects the final hidden state back to the vocabulary size to predict the next token.
+### 1. Rotary Positional Embeddings (RoPE)
+Unlike standard GPT models that use absolute learned positional embeddings, NanoTextLM uses RoPE. This injects positional information by rotating the Query and Key vectors in the attention mechanism, allowing for better generalization to sequence lengths longer than those seen during training.
 
-### 2. Transformer Block
-Each block consists of two sub-layers:
-- **Causal Self-Attention:** Allows the model to attend to past tokens.
-- **Feed-Forward Network (MLP):** Processes the information independently at each position.
-Both sub-layers are wrapped with Layer Normalization and residual connections.
+### 2. RMSNorm
+We utilize Root Mean Square Normalization (RMSNorm) instead of standard LayerNorm. RMSNorm is computationally more efficient and provides better numerical stability during training.
 
-### 3. Causal Self-Attention
-We utilize `torch.nn.functional.scaled_dot_product_attention`, which leverages Flash Attention (if available) for memory-efficient and fast computation. The attention mechanism is masked to prevent the model from looking into the future (causal masking).
+### 3. SwiGLU Activation
+The Feed-Forward Network (MLP) uses the SwiGLU activation function instead of GELU. SwiGLU (Swish Gated Linear Unit) involves three linear projections and has been shown to improve performance in models like LLaMA and PaLM.
+
+### 4. Bias-Free Linear Layers
+To optimize memory usage and parameter count, we have disabled biases in all linear layers (QKV projections and MLP layers), relying on RMSNorm for centering.
+
+### 5. Flash Attention
+The model leverages PyTorch 2.0's `scaled_dot_product_attention`, which uses IO-aware implementations (Flash Attention) to significantly reduce memory access and increase speed.
 
 ## Optimizations
 
-### Flash Attention
-By using PyTorch 2.0's native scaled dot product attention, we reduce memory bandwidth usage (HBM) and increase computational speed compared to standard attention implementations.
-
-### Automatic Mixed Precision (AMP)
-The training loop utilizes `torch.amp` to perform operations in `float16` or `bfloat16` where appropriate, reducing memory footprint and speeding up tensor core operations on NVIDIA GPUs.
-
-### Torch Compile
-The model graph is optimized using `torch.compile` (JIT), which fuses kernels and reduces Python overhead during execution.
-
-### Fused AdamW
-When training on CUDA devices, we employ the fused implementation of the AdamW optimizer, which batches element-wise updates to the parameters, further reducing training time.
+### Training Optimizations
+- **Automatic Mixed Precision (AMP):** Runs compute-heavy operations in float16/bfloat16.
+- **Gradient Checkpointing:** Trades compute for memory by discarding intermediate activations during the forward pass and recomputing them during the backward pass.
+- **Torch Compile:** Uses JIT compilation to fuse kernels.
+- **Smart Weight Decay:** Applies weight decay only to 2D parameters (weights), excluding norms and embeddings.

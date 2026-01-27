@@ -1,50 +1,51 @@
 # Usage Guide
 
-## Data Preparation
+## Makefile Shortcuts
 
-Before training, you must prepare the dataset. NanoTextLM expects binary files (`.bin`) containing raw uint16 token IDs.
+The project includes a `Makefile` to simplify common commands:
 
-### Quick Start (Shakespeare Dataset)
-To download and tokenize the Tiny Shakespeare dataset for a quick demo:
-
-python scripts/prepare_shakespeare.py
-
-### Custom Data (OpenWebText)
-1. Download and extract raw text from Parquet files:
-   python scripts/process_data.py
-
-2. Train the BPE tokenizer on the raw text:
-   python scripts/train_tokenizer.py
-
-3. Tokenize the text into binary format:
-   python scripts/tokenize_data.py
+- `make install`: Install Python dependencies.
+- `make prepare`: Download and process the Shakespeare dataset.
+- `make train`: Run full training on the default dataset.
+- `make demo`: Run a fast training loop on Shakespeare.
+- `make web`: Start the FastAPI web server.
+- `make infer`: Start the CLI chat.
+- `make test`: Run unit tests.
+- `make evaluate`: Calculate Perplexity on the validation set.
 
 ## Training
 
-### Demo Mode
-Train a small model on the Shakespeare dataset (CPU-friendly):
+### Resuming Training
+To resume training from a checkpoint, use the `--resume` flag:
 
-python src/train.py --demo
+python src/train.py --resume checkpoints/final_model.pt
 
-### Full Training
-Train the full model on OpenWebText (GPU recommended):
+### Weights & Biases
+To enable experiment tracking, set the configuration in `src/config.py`:
 
-python src/train.py
-
-**Key Configuration:**
-- Logs and checkpoints are saved to the `checkpoints/` directory.
-- Training parameters (batch size, learning rate) can be modified in `src/config.py`.
+wandb_project: str = "nanotextlm"
+wandb_run_name: str = "experiment-1"
 
 ## Inference
 
-### Command Line Interface (CLI)
-Run the interactive CLI to chat with the model. It supports streaming output.
+### Web Interface
+The web interface (FastAPI) supports real-time streaming and parameter adjustment.
+- **Temperature:** Controls randomness (higher = more creative).
+- **Top-P:** Nucleus sampling threshold.
+- **Max Tokens:** Length of generation.
 
+### CLI Chat
+The CLI maintains conversation history.
 python src/inference.py
 
-### Web Interface
-Launch the Flask web server to interact via a browser.
+## Evaluation
+Calculate the Perplexity (PPL) of your model to gauge its quality.
 
-python src/app.py
+python scripts/evaluate.py --model checkpoints/final_model.pt --data data/processed/val.bin
 
-Access the interface at http://localhost:5000.
+## Deployment
+
+### Hugging Face Hub
+Upload your model to the Hugging Face Hub:
+
+python scripts/push_to_hub.py --checkpoint checkpoints/final_model.pt --repo your-username/nanotextlm --token YOUR_TOKEN

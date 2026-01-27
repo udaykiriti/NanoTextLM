@@ -3,80 +3,57 @@
 ![Python Tests](https://github.com/udaykiriti/NanoTextLM/actions/workflows/tests.yml/badge.svg)
 ![Docker Build](https://github.com/udaykiriti/NanoTextLM/actions/workflows/docker.yml/badge.svg)
 
-NanoTextLM is a lightweight, optimized language model trained from scratch on the OpenWebText dataset. It features a GPT-style decoder-only Transformer architecture with modern optimizations like Flash Attention and streaming inference.
+NanoTextLM is a high-performance, lightweight language model trained from scratch. It implements a modern LLaMA-style architecture (RoPE, SwiGLU, RMSNorm) and features a complete training, evaluation, and deployment pipeline.
 
 ## Features
 
-- **Architecture:** 12-layer, 12-head Transformer (~85M parameters).
-- **Optimization:** Flash Attention (PyTorch 2.0), `torch.compile`, Fused AdamW, Automatic Mixed Precision (AMP).
-- **Inference:** Streaming generation via CLI (Rich UI) and Web API (SSE).
-- **Ops:** Docker containerization and GitHub Actions CI/CD pipeline.
-- **UI:** Modern Dark Mode Web Interface.
+- **Architecture:** 
+  - Rotary Positional Embeddings (RoPE)
+  - SwiGLU Activation
+  - RMSNorm (Root Mean Square Normalization)
+  - Flash Attention (PyTorch 2.0)
+  - No Biases in Linear Layers
 
-## Project Structure
+- **Training:**
+  - Automatic Mixed Precision (AMP)
+  - Gradient Accumulation
+  - Gradient Checkpointing (VRAM optimization)
+  - Fused AdamW Optimizer
+  - Weights & Biases (WandB) Logging
+  - Resume Training Support
 
-- `src/`: Source code (Model, Training, Inference, App).
-- `scripts/`: Data processing scripts.
-- `data/`: Dataset storage.
-- `tests/`: Unit tests.
+- **Inference:**
+  - High-performance FastAPI Backend
+  - Real-time Streaming (SSE)
+  - Top-P (Nucleus) & Temperature Sampling
+  - Context-Aware CLI Chat
+  - Modern Web UI with Advanced Controls
 
-## Usage
+- **Operations:**
+  - Docker Containerization
+  - GitHub Actions CI/CD
+  - Makefile for Common Tasks
+  - Hugging Face Hub Integration
 
-### 1. Installation
+## Quick Start
 
-```bash
+### 1. Install
 pip install -r requirements.txt
-```
 
-### 2. Data Preparation
+### 2. Prepare Data (Shakespeare Demo)
+make prepare
 
-Download and process the OpenWebText subset:
+### 3. Train (Demo)
+make demo
 
-```bash
-# 1. Process Parquet to Text
-python scripts/process_data.py
+### 4. Chat (Web UI)
+make web
 
-# 2. Train Tokenizer
-python scripts/train_tokenizer.py
+Access the interface at http://localhost:5000.
 
-# 3. Tokenize Data (Text to Binary)
-python scripts/tokenize_data.py
-```
+## Documentation
 
-### 3. Training
-
-Train the model with optimizations (CUDA recommended):
-
-```bash
-python src/train.py
-```
-
-### 4. Inference
-
-**CLI (Streaming):**
-```bash
-python src/inference.py
-```
-
-**Web App (Streaming UI):**
-```bash
-python src/app.py
-```
-Open [http://localhost:5000](http://localhost:5000) in your browser.
-
-## Testing
-
-Run unit tests to verify the architecture:
-
-```bash
-pytest tests/
-```
-
-## Docker
-
-Build and run the container:
-
-```bash
-docker build -t nanotextlm .
-docker run -p 5000:5000 nanotextlm
-```
+- [Architecture Details](docs/architecture.md)
+- [Setup Guide](docs/setup.md)
+- [Usage Guide](docs/usage.md)
+- [Data Pipeline](docs/data_pipeline.md)
