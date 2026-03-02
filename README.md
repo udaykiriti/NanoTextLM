@@ -91,18 +91,27 @@ NanoTextLM/
 
 ## Documentation
 
-For deeper dives, check out our technical guides:
-- Architecture Details (docs/architecture.md)
-- Setup Guide (docs/setup.md)
-- Usage Guide (docs/usage.md)
-- Data Pipeline (docs/data_pipeline.md)
+For a deeper dive into the architecture and setup, please refer to the following guides:
+
+*   **Architecture Guide:** [Detailed technical overview of the model](docs/architecture.md)
+*   **Setup Guide:** [Environment configuration and installation steps](docs/setup.md)
+*   **Usage Guide:** [Comprehensive instructions for training and inference](docs/usage.md)
+*   **Data Pipeline:** [Details on dataset preparation and tokenization](docs/data_pipeline.md)
 
 ---
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+We welcome contributions of all kinds! Whether you're fixing a bug, adding a new feature, or updating documentation, follow these steps to contribute:
+
+1.  **Fork** the repository to your own account.
+2.  **Create** a new branch for your feature (`git checkout -b feature/amazing-feature`).
+3.  **Commit** your changes with clear messages (`git commit -m 'Add amazing feature'`).
+4.  **Push** your branch to your fork (`git push origin feature/amazing-feature`).
+5.  **Submit** a Pull Request against our main branch.
+
+---
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **MIT License**. For the full legal text, please refer to the [LICENSE](LICENSE) file.
