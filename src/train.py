@@ -180,7 +180,7 @@ def train():
             for param_group in optimizer.param_groups:
                 param_group['lr'] = lr
                 
-            x, y = x.to(t_conf.device), y.to(t_conf.device)
+            x, y = x.to(t_conf.device, non_blocking=True), y.to(t_conf.device, non_blocking=True)
             
             # Forward pass with Mixed Precision
             ctx = torch.amp.autocast(device_type=t_conf.device.type, dtype=torch.float16) if t_conf.device.type == 'cuda' else torch.nullcontext()
