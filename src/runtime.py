@@ -30,6 +30,13 @@ def resolve_checkpoint_path(project_root: str = PROJECT_ROOT) -> str:
     return os.path.join(project_root, "checkpoints", "best_model.pt")
 
 
+def resolve_tokenizer_path(project_root: str = PROJECT_ROOT) -> str:
+    override_path = os.environ.get("NANOTEXTLM_TOKENIZER")
+    if override_path:
+        return override_path
+    return os.path.join(project_root, "tokenizer.json")
+
+
 def load_checkpoint_state(model_path: str, device: str):
     state = torch.load(model_path, map_location=device)
     if isinstance(state, dict) and "model" in state:
@@ -40,7 +47,7 @@ def load_checkpoint_state(model_path: str, device: str):
 def load_inference_resources(compile_model: bool = True):
     device = get_device()
     model_path = resolve_checkpoint_path()
-    tokenizer_path = os.path.join(PROJECT_ROOT, "tokenizer.json")
+    tokenizer_path = resolve_tokenizer_path()
     if not os.path.exists(tokenizer_path):
         raise FileNotFoundError(
             f"Tokenizer not found at {tokenizer_path}. Run tokenizer training or restore tokenizer.json."

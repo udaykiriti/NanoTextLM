@@ -27,3 +27,10 @@ def test_resolve_checkpoint_path_prefers_environment_override(monkeypatch, tmp_p
     monkeypatch.setenv("NANOTEXTLM_CHECKPOINT", str(override_path))
 
     assert runtime.resolve_checkpoint_path() == str(override_path)
+
+
+def test_resolve_tokenizer_path_prefers_environment_override(monkeypatch, tmp_path):
+    override_path = tmp_path / "tokenizer.json"
+    monkeypatch.setenv("NANOTEXTLM_TOKENIZER", str(override_path))
+
+    assert runtime.resolve_tokenizer_path() == str(override_path)
