@@ -2,7 +2,7 @@ import torch
 from torch.utils.data import Dataset
 import numpy as np
 import os
-from typing import Tuple, Optional
+from typing import Tuple
 
 class TextDataset(Dataset):
     """
@@ -16,6 +16,8 @@ class TextDataset(Dataset):
     """
     def __init__(self, data_path: str, block_size: int, split: str = 'train', split_ratio: float = 0.9):
         self.block_size = block_size
+        if split not in {"train", "val"}:
+            raise ValueError(f"Unsupported split '{split}'. Expected 'train' or 'val'.")
         
         if not os.path.exists(data_path):
              print(f"Error: {data_path} not found.")
@@ -34,7 +36,8 @@ class TextDataset(Dataset):
             else:
                 self.data = raw_data[split_idx:]
                 
-            self.num_samples = (len(self.data) - 1) // self.block_size
+            available_tokens = max(0, len(self.data) - 1)
+            self.num_samples = available_tokens // self.block_size
             print(f"[{split.upper()}] Loaded from {data_path}. Tokens: {len(self.data):,}. Samples: {self.num_samples:,}")
         except Exception as e:
             print(f"Error loading memmap: {e}")
