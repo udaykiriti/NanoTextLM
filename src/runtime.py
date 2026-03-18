@@ -14,7 +14,10 @@ def get_device(env: dict | None = None) -> str:
     env = os.environ if env is None else env
     override_device = env.get("NANOTEXTLM_DEVICE")
     if override_device:
-        return override_device.strip().lower()
+        device = override_device.strip().lower()
+        if device not in {"cpu", "cuda"}:
+            raise ValueError("NANOTEXTLM_DEVICE must be 'cpu' or 'cuda'")
+        return device
     return "cuda" if torch.cuda.is_available() else "cpu"
 
 

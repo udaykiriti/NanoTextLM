@@ -27,6 +27,11 @@ def test_get_device_prefers_environment_override():
     assert runtime.get_device(env={"NANOTEXTLM_DEVICE": "cuda"}) == "cuda"
 
 
+def test_get_device_rejects_invalid_override():
+    with pytest.raises(ValueError, match="NANOTEXTLM_DEVICE"):
+        runtime.get_device(env={"NANOTEXTLM_DEVICE": "tpu"})
+
+
 def test_resolve_checkpoint_path_prefers_environment_override(monkeypatch, tmp_path):
     override_path = tmp_path / "custom.pt"
     monkeypatch.setenv("NANOTEXTLM_CHECKPOINT", str(override_path))
