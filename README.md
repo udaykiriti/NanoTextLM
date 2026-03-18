@@ -36,7 +36,7 @@
   <code>CLI Chat</code>
 </p>
 
-## Why This Project
+## [Overview] Why This Project
 
 | Built For | What You Get |
 |-----------|---------------|
@@ -44,13 +44,13 @@
 | Quick local experiments | Small configs, demo training, CLI chat, and a FastAPI app |
 | Simple iteration | Minimal runtime helpers, clear scripts, and direct checkpoints |
 
-## At A Glance
+## [Snapshot] At A Glance
 
-- **Modern core:** RoPE, RMSNorm, SwiGLU, Flash Attention.
-- **Practical training:** AMP, gradient accumulation, optional WandB, checkpoint resume.
-- **Usable inference:** CLI chat, web streaming, runtime overrides for device/checkpoint/tokenizer.
+- **[Model]**: RoPE, RMSNorm, SwiGLU, Flash Attention.
+- **[Training]**: AMP, gradient accumulation, optional WandB, checkpoint resume.
+- **[Serving]**: CLI chat, web streaming, runtime overrides for device/checkpoint/tokenizer.
 
-## Tech Stack
+## [Stack] Tech Stack
 
 | Layer | Tools |
 |-------|-------|
@@ -61,26 +61,26 @@
 
 ---
 
-## Key Features
+## [Features] Key Features
 
-### Architecture
-- **State-of-the-Art:** RoPE (Rotary Positional Embeddings), SwiGLU activation, and RMSNorm.
-- **Speed:** Optimized with Flash Attention (PyTorch 2.0+) and fused AdamW optimizer.
-- **Efficiency:** Gradient checkpointing and Automatic Mixed Precision (AMP) for low VRAM usage.
+### [Model]
+- **RoPE**: Rotary positional embeddings.
+- **SwiGLU + RMSNorm**: Modern transformer building blocks.
+- **Flash Attention**: Fast attention path on supported PyTorch builds.
 
-### Training & Evaluation
-- **Scalable:** Built-in gradient accumulation for large batch training on small GPUs.
-- **Observability:** Optional Weights & Biases (WandB) integration for experiment logging.
-- **Robust:** Support for resuming training from checkpoints and easy Hugging Face Hub integration.
+### [Training]
+- **AMP**: Mixed precision for lower memory use.
+- **Gradient accumulation**: More effective batch size on smaller hardware.
+- **Checkpoint resume**: Continue interrupted runs.
 
-### Inference & Deployment
-- **Interactive:** Context-aware CLI chat and a modern FastAPI-powered Web UI.
-- **Real-time:** Streaming support (SSE) for low-latency text generation.
-- **Deployable:** Local Docker build support and GitHub Actions test coverage.
+### [Inference]
+- **CLI chat**: Quick local interaction.
+- **FastAPI app**: Browser-based text generation.
+- **Runtime overrides**: Device, tokenizer, checkpoint, and compile controls.
 
 ---
 
-## Quick Start
+## [Quick Start] Quick Start
 
 ```bash
 make install
@@ -89,7 +89,7 @@ make demo
 make web
 ```
 
-### 1. Installation
+### [1] Install
 Ensure you have Python 3.9+ installed. Clone the repo and install dependencies:
 ```bash
 git clone https://github.com/udaykiriti/NanoTextLM.git
@@ -102,19 +102,19 @@ If you want to run tests locally, make sure `pytest` is installed in your enviro
 pip install pytest
 ```
 
-### 2. Prepare Data
+### [2] Prepare Data
 Download and tokenize the Tiny Shakespeare dataset for a quick demo:
 ```bash
 make prepare
 ```
 
-### 3. Run Training (Demo)
+### [3] Train A Demo Model
 Start a small-scale training run to verify your setup:
 ```bash
 make demo
 ```
 
-### 4. Chat with the Model
+### [4] Run The App
 Launch the interactive Web UI and start generating text:
 ```bash
 make web
@@ -134,7 +134,7 @@ make test
 
 ---
 
-## Model Configuration
+## [Config] Model Configuration
 
 NanoTextLM is highly configurable. Key parameters in `src/config.py` include:
 
@@ -147,7 +147,7 @@ NanoTextLM is highly configurable. Key parameters in `src/config.py` include:
 
 ---
 
-## Project Structure
+## [Structure] Project Structure
 
 ```text
 NanoTextLM/
@@ -165,7 +165,7 @@ NanoTextLM/
 
 ---
 
-## Documentation
+## [Docs] Documentation
 
 For a deeper dive into the architecture and setup, please refer to the following guides:
 
@@ -176,7 +176,7 @@ For a deeper dive into the architecture and setup, please refer to the following
 
 ---
 
-## Contributing
+## [Contributing] Contributing
 
 We welcome contributions of all kinds! Whether you're fixing a bug, adding a new feature, or updating documentation, follow these steps to contribute:
 
@@ -188,6 +188,6 @@ We welcome contributions of all kinds! Whether you're fixing a bug, adding a new
 
 ---
 
-## License
+## [License] License
 
 This project is licensed under the **MIT License**. For the full legal text, please refer to the [LICENSE](LICENSE) file.
