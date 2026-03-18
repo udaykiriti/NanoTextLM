@@ -14,6 +14,12 @@ def get_device() -> str:
     return "cuda" if torch.cuda.is_available() else "cpu"
 
 
+def should_compile_model(device: str, env: dict | None = None) -> bool:
+    env = os.environ if env is None else env
+    compile_flag = env.get("NANOTEXTLM_COMPILE", "1").strip().lower()
+    return device == "cuda" and compile_flag not in {"0", "false", "no"}
+
+
 def resolve_checkpoint_path(project_root: str = PROJECT_ROOT) -> str:
     final_path = os.path.join(project_root, "checkpoints", "final_model.pt")
     if os.path.exists(final_path):
@@ -43,7 +49,7 @@ def load_inference_resources(compile_model: bool = True):
         model.load_state_dict(load_checkpoint_state(model_path, device))
     model.eval()
 
-    if compile_model and hasattr(torch, "compile"):
+    if compile_model and should_compile_model(device) and hasattr(torch, "compile"):
         model = torch.compile(model)
 
     tokenizer = Tokenizer.from_file(tokenizer_path)
