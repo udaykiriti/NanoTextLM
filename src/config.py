@@ -27,13 +27,16 @@ class NanoConfig(ModelConfig):
 class TrainingConfig:
     batch_size: int = 8
     gradient_accumulation_steps: int = 4
+    num_workers: int = 4
     learning_rate: float = 3e-4
     max_epochs: int = 3
     weight_decay: float = 0.1
     log_every: int = 10
     save_every: int = 500
     eval_every: int = 200
+    eval_iters: int = 50
     output_dir: str = "checkpoints"
+    compile_model: bool = True
     
     # Optimization
     warmup_iters: int = 100

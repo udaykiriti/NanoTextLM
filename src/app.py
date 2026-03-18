@@ -1,6 +1,5 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 import torch
@@ -9,7 +8,6 @@ from model import NanoTextLM
 from tokenizers import Tokenizer
 import os
 import asyncio
-import json
 
 # Setup
 app = FastAPI(title="NanoTextLM API")
@@ -41,7 +39,10 @@ def load_resources():
         model = NanoTextLM(m_conf).to(device)
         
         if os.path.exists(model_path):
-            model.load_state_dict(torch.load(model_path, map_location=device))
+            state_dict = torch.load(model_path, map_location=device)
+            if 'model' in state_dict:
+                state_dict = state_dict['model']
+            model.load_state_dict(state_dict)
         else:
             print("Warning: No checkpoint found. Using random weights.")
             
@@ -75,18 +76,16 @@ async def generate_stream_api(req: GenerateRequest):
         
         # We need a wrapper to make the synchronous generator async-friendly
         # or just iterate it. FastAPI handles iterators in StreamingResponse.
-        with torch.no_grad():
-            for token_idx in model.generate_stream(
-                idx, 
-                max_new_tokens=req.max_tokens, 
-                temperature=req.temperature, 
-                top_p=req.top_p
-            ):
-                token_val = token_idx.item()
-                text_chunk = tokenizer.decode([token_val])
-                yield text_chunk
-                # Tiny sleep to allow event loop to breathe if CPU bound
-                await asyncio.sleep(0)
+        for token_idx in model.generate_stream(
+            idx,
+            max_new_tokens=req.max_tokens,
+            temperature=req.temperature,
+            top_p=req.top_p
+        ):
+            token_val = token_idx.item()
+            text_chunk = tokenizer.decode([token_val])
+            yield text_chunk
+            await asyncio.sleep(0)
 
     return StreamingResponse(generate(), media_type="text/plain")
 

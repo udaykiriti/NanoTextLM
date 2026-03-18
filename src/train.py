@@ -11,7 +11,12 @@ import time
 import argparse
 import random
 import numpy as np
-import wandb
+from contextlib import nullcontext
+
+try:
+    import wandb
+except ImportError:
+    wandb = None
 
 def get_lr(it, t_conf):
     # 1) linear warmup
@@ -26,7 +31,7 @@ def get_lr(it, t_conf):
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
     return t_conf.min_lr + coeff * (t_conf.learning_rate - t_conf.min_lr)
 
-@torch.no_grad()
+@torch.inference_mode()
 def estimate_loss(model, dataloaders, device, eval_iters=50):
     out = {}
     model.eval()
@@ -40,11 +45,11 @@ def estimate_loss(model, dataloaders, device, eval_iters=50):
                 iter_loader = iter(loader)
                 x, y = next(iter_loader)
                 
-            x, y = x.to(device), y.to(device)
-            # Handle AMP context
-            ctx = torch.amp.autocast(device_type=device.type, dtype=torch.float16) if device.type == 'cuda' else torch.nullcontext()
+            x = x.to(device, non_blocking=True)
+            y = y.to(device, non_blocking=True)
+            ctx = torch.amp.autocast(device_type=device.type, dtype=torch.float16) if device.type == 'cuda' else nullcontext()
             with ctx:
-                logits, loss = model(x, y)
+                _, loss = model(x, y)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -93,6 +98,7 @@ def train():
         print(f"Using GPU: {torch.cuda.get_device_name(0)}")
         # Enable TF32 for huge speedups on Ampere+ (A100, 3090, 4090, etc.)
         torch.set_float32_matmul_precision('high')
+        torch.backends.cudnn.benchmark = True
     else:
         print(f"Using Device: {t_conf.device}")
 
@@ -105,14 +111,25 @@ def train():
     train_dataset = TextDataset(data_path, m_conf.max_seq_len, split='train')
     val_dataset = TextDataset(data_path, m_conf.max_seq_len, split='val')
     
-    train_loader = DataLoader(train_dataset, batch_size=t_conf.batch_size, shuffle=True, 
-                            num_workers=4 if t_conf.device.type == 'cuda' else 0, 
-                            pin_memory=True, 
-                            persistent_workers=True if t_conf.device.type == 'cuda' else False)
-    val_loader = DataLoader(val_dataset, batch_size=t_conf.batch_size, shuffle=False, 
-                          num_workers=4 if t_conf.device.type == 'cuda' else 0, 
-                          pin_memory=True,
-                          persistent_workers=True if t_conf.device.type == 'cuda' else False)
+    loader_num_workers = t_conf.num_workers if t_conf.device.type == 'cuda' else 0
+    pin_memory = t_conf.device.type == 'cuda'
+    persistent_workers = loader_num_workers > 0
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=t_conf.batch_size,
+        shuffle=True,
+        num_workers=loader_num_workers,
+        pin_memory=pin_memory,
+        persistent_workers=persistent_workers
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=t_conf.batch_size,
+        shuffle=False,
+        num_workers=loader_num_workers,
+        pin_memory=pin_memory,
+        persistent_workers=persistent_workers
+    )
 
     if len(train_dataset) == 0:
         print("Training dataset is empty.")
@@ -123,7 +140,7 @@ def train():
     print(f"Model initialized. Parameters: {sum(p.numel() for p in model.parameters())/1e6:.2f}M")
     
     # Optimization: Compile
-    if hasattr(torch, "compile"):
+    if t_conf.compile_model and hasattr(torch, "compile"):
         print("Compiling model with torch.compile...")
         model = torch.compile(model)
 
@@ -155,7 +172,7 @@ def train():
             print(f"Checkpoint {args.resume} not found. Starting from scratch.")
 
     # WandB Init
-    if t_conf.wandb_project:
+    if t_conf.wandb_project and wandb is not None:
         print(f"Initializing WandB project: {t_conf.wandb_project}")
         wandb.init(
             project=t_conf.wandb_project, 
@@ -164,6 +181,8 @@ def train():
             resume="allow",
             id=t_conf.wandb_run_name if args.resume else None
         )
+    elif t_conf.wandb_project:
+        print("WandB is not installed. Continuing without experiment logging.")
 
     # Training Loop
     model.train()
@@ -183,7 +202,7 @@ def train():
             x, y = x.to(t_conf.device, non_blocking=True), y.to(t_conf.device, non_blocking=True)
             
             # Forward pass with Mixed Precision
-            ctx = torch.amp.autocast(device_type=t_conf.device.type, dtype=torch.float16) if t_conf.device.type == 'cuda' else torch.nullcontext()
+            ctx = torch.amp.autocast(device_type=t_conf.device.type, dtype=torch.float16) if t_conf.device.type == 'cuda' else nullcontext()
             
             with ctx:
                 logits, loss = model(x, y)
@@ -213,7 +232,7 @@ def train():
                     loss_val = loss.item() * t_conf.gradient_accumulation_steps
                     print(f"Epoch {epoch+1} | Step {iter_num} | Loss: {loss_val:.4f} | LR: {lr:.2e} | Time: {dt*1000:.2f}ms")
                     
-                    if wandb.run:
+                    if wandb is not None and wandb.run:
                         wandb.log({
                             "train/loss": loss_val,
                             "train/lr": lr,
@@ -223,10 +242,15 @@ def train():
 
                 # Evaluation & Checkpointing
                 if iter_num > 0 and iter_num % t_conf.eval_every == 0:
-                    losses = estimate_loss(model, {'train': train_loader, 'val': val_loader}, t_conf.device)
+                    losses = estimate_loss(
+                        model,
+                        {'train': train_loader, 'val': val_loader},
+                        t_conf.device,
+                        eval_iters=t_conf.eval_iters
+                    )
                     print(f"Step {iter_num} Evaluation: Train Loss {losses['train']:.4f}, Val Loss {losses['val']:.4f}")
                     
-                    if wandb.run:
+                    if wandb is not None and wandb.run:
                         wandb.log({
                             "val/loss": losses['val'],
                             "train/eval_loss": losses['train']
@@ -259,6 +283,8 @@ def train():
         'config': vars(m_conf)
     }
     torch.save(checkpoint, os.path.join(t_conf.output_dir, "final_model.pt"))
+    if wandb is not None and wandb.run:
+        wandb.finish()
     print("Training complete.")
 
 if __name__ == "__main__":

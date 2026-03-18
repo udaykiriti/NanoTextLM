@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+import inspect
 from typing import Optional, Tuple
 
 class RMSNorm(nn.Module):
@@ -173,14 +174,18 @@ class NanoTextLM(nn.Module):
             {'params': nodecay_params, 'weight_decay': 0.0}
         ]
         
-        use_fused = (device_type == 'cuda')
+        use_fused = (
+            device_type == 'cuda'
+            and "fused" in inspect.signature(torch.optim.AdamW).parameters
+        )
         extra_args = dict(fused=True) if use_fused else dict()
         optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=(0.9, 0.99), **extra_args)
         return optimizer
 
     def forward(self, idx, targets=None) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
-        device = idx.device
         b, t = idx.size()
+        if t > self.config.max_seq_len:
+            raise ValueError(f"Sequence length {t} exceeds max_seq_len={self.config.max_seq_len}")
         
         # Slice RoPE frequencies
         freqs_cos = self.freqs_cos[:t]
@@ -230,6 +235,7 @@ class NanoTextLM(nn.Module):
         idx_next = torch.multinomial(probs, num_samples=1)
         return idx_next
 
+    @torch.inference_mode()
     def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None, top_p=None):
         for _ in range(max_new_tokens):
             idx_cond = idx if idx.size(1) <= self.config.max_seq_len else idx[:, -self.config.max_seq_len:]
@@ -238,7 +244,7 @@ class NanoTextLM(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1)
         return idx
 
-    @torch.no_grad()
+    @torch.inference_mode()
     def generate_stream(self, idx, max_new_tokens, temperature=1.0, top_k=None, top_p=None):
         for _ in range(max_new_tokens):
             idx_cond = idx if idx.size(1) <= self.config.max_seq_len else idx[:, -self.config.max_seq_len:]

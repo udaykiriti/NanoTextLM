@@ -55,3 +55,14 @@ def test_forward_pass_with_targets(model_config):
 
 def test_generate_stream(model_config):
     model = NanoTextLM(model_config)
+    idx = torch.randint(0, model_config.vocab_size, (1, 5))
+    generated = list(model.generate_stream(idx, max_new_tokens=3))
+    assert len(generated) == 3
+    assert all(token.shape == (1, 1) for token in generated)
+
+def test_forward_rejects_too_long_sequence(model_config):
+    model = NanoTextLM(model_config)
+    idx = torch.randint(0, model_config.vocab_size, (1, model_config.max_seq_len + 1))
+
+    with pytest.raises(ValueError):
+        model(idx)
