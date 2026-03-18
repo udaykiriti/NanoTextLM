@@ -19,6 +19,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 class GenerateRequest(BaseModel):
     prompt: str
     temperature: float = Field(default=1.0, ge=0.0)
+    top_k: int | None = Field(default=None, gt=0)
     top_p: float = Field(default=0.9, gt=0.0, le=1.0)
     max_tokens: int = Field(default=150, ge=0)
 
@@ -59,6 +60,7 @@ async def generate_stream_api(req: GenerateRequest):
             idx,
             max_new_tokens=req.max_tokens,
             temperature=req.temperature,
+            top_k=req.top_k,
             top_p=req.top_p
         ):
             token_val = token_idx.item()
