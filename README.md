@@ -1,10 +1,9 @@
 # NanoTextLM
 
 [![Python Tests](https://github.com/udaykiriti/NanoTextLM/actions/workflows/tests.yml/badge.svg)](https://github.com/udaykiriti/NanoTextLM/actions)
-[![Docker Build](https://github.com/udaykiriti/NanoTextLM/actions/workflows/docker.yml/badge.svg)](https://github.com/udaykiriti/NanoTextLM/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**NanoTextLM** is a high-performance, lightweight language model built from scratch using PyTorch. Designed for efficiency and modularity, it implements a modern LLaMA-style architecture with features like RoPE, SwiGLU, and Flash Attention.
+**NanoTextLM** is a lightweight language model project built with PyTorch. It focuses on a compact LLaMA-style architecture, simple training scripts, and minimal inference surfaces for local experimentation.
 
 ---
 
@@ -17,13 +16,13 @@
 
 ### Training & Evaluation
 - **Scalable:** Built-in gradient accumulation for large batch training on small GPUs.
-- **Observability:** Seamless Weights & Biases (WandB) integration for real-time logging.
+- **Observability:** Optional Weights & Biases (WandB) integration for experiment logging.
 - **Robust:** Support for resuming training from checkpoints and easy Hugging Face Hub integration.
 
 ### Inference & Deployment
 - **Interactive:** Context-aware CLI chat and a modern FastAPI-powered Web UI.
 - **Real-time:** Streaming support (SSE) for low-latency text generation.
-- **Deployable:** Ready-to-use Docker containerization and GitHub Actions CI/CD.
+- **Deployable:** Local Docker build support and GitHub Actions test coverage.
 
 ---
 
@@ -35,6 +34,11 @@ Ensure you have Python 3.9+ installed. Clone the repo and install dependencies:
 git clone https://github.com/udaykiriti/NanoTextLM.git
 cd NanoTextLM
 make install
+```
+
+If you want to run tests locally, make sure `pytest` is installed in your environment:
+```bash
+pip install pytest
 ```
 
 ### 2. Prepare Data
@@ -56,6 +60,16 @@ make web
 ```
 > [!NOTE]
 > Access the web interface at `http://localhost:5000`.
+
+Run the CLI chat interface instead:
+```bash
+make infer
+```
+
+Run the test suite:
+```bash
+make test
+```
 
 ---
 
@@ -79,12 +93,13 @@ NanoTextLM/
 ├── src/               # Core model and training logic
 │   ├── model.py       # LLaMA-style Transformer implementation
 │   ├── train.py       # Training loop with AMP and WandB
-│   └── app.py         # FastAPI Web Backend
+│   ├── app.py         # FastAPI Web backend
+│   └── runtime.py     # Shared inference loading utilities
 ├── scripts/           # Data processing and utility scripts
 ├── docs/              # Detailed technical documentation
 ├── tests/             # Unit and integration tests
 ├── Makefile           # Convenient task automation
-└── Dockerfile         # Containerized deployment
+└── Dockerfile         # Optional local container build
 ```
 
 ---
@@ -106,7 +121,7 @@ We welcome contributions of all kinds! Whether you're fixing a bug, adding a new
 
 1.  **Fork** the repository to your own account.
 2.  **Create** a new branch for your feature (`git checkout -b feature/amazing-feature`).
-3.  **Commit** your changes with clear messages (`git commit -m 'Add amazing feature'`).
+3.  **Commit** your changes with clear messages (`git commit -s -m 'Add amazing feature'`).
 4.  **Push** your branch to your fork (`git push origin feature/amazing-feature`).
 5.  **Submit** a Pull Request against our main branch.
 
