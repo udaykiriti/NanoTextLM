@@ -20,12 +20,14 @@ except ImportError:
 
 def get_lr(it, t_conf):
     # 1) linear warmup
-    if it < t_conf.warmup_iters:
+    if t_conf.warmup_iters > 0 and it < t_conf.warmup_iters:
         return t_conf.learning_rate * it / t_conf.warmup_iters
     # 2) if it > lr_decay_iters, return min learning rate
     if it > t_conf.lr_decay_iters:
         return t_conf.min_lr
     # 3) in between, use cosine decay down to min learning rate
+    if t_conf.lr_decay_iters <= t_conf.warmup_iters:
+        return t_conf.min_lr
     decay_ratio = (it - t_conf.warmup_iters) / (t_conf.lr_decay_iters - t_conf.warmup_iters)
     assert 0 <= decay_ratio <= 1
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
