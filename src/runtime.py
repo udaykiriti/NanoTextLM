@@ -32,6 +32,10 @@ def load_inference_resources(compile_model: bool = True):
     device = get_device()
     model_path = resolve_checkpoint_path()
     tokenizer_path = os.path.join(PROJECT_ROOT, "tokenizer.json")
+    if not os.path.exists(tokenizer_path):
+        raise FileNotFoundError(
+            f"Tokenizer not found at {tokenizer_path}. Run tokenizer training or restore tokenizer.json."
+        )
 
     model = NanoTextLM(ModelConfig()).to(device)
     checkpoint_exists = os.path.exists(model_path)
