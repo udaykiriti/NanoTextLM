@@ -60,6 +60,27 @@ def test_generate_stream(model_config):
     assert len(generated) == 3
     assert all(token.shape == (1, 1) for token in generated)
 
+def test_generate_zero_tokens_returns_input(model_config):
+    model = NanoTextLM(model_config)
+    idx = torch.randint(0, model_config.vocab_size, (1, 5))
+
+    out = model.generate(idx, max_new_tokens=0)
+
+    assert torch.equal(out, idx)
+
+def test_generate_rejects_invalid_sampling_args(model_config):
+    model = NanoTextLM(model_config)
+    idx = torch.randint(0, model_config.vocab_size, (1, 5))
+
+    with pytest.raises(ValueError):
+        model.generate(idx, max_new_tokens=1, temperature=-0.1)
+
+    with pytest.raises(ValueError):
+        model.generate(idx, max_new_tokens=1, top_k=0)
+
+    with pytest.raises(ValueError):
+        model.generate(idx, max_new_tokens=1, top_p=1.5)
+
 def test_forward_rejects_too_long_sequence(model_config):
     model = NanoTextLM(model_config)
     idx = torch.randint(0, model_config.vocab_size, (1, model_config.max_seq_len + 1))

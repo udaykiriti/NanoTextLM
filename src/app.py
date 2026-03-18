@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import torch
 import os
 import asyncio
@@ -18,9 +18,9 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 class GenerateRequest(BaseModel):
     prompt: str
-    temperature: float = 1.0
-    top_p: float = 0.9
-    max_tokens: int = 150
+    temperature: float = Field(default=1.0, ge=0.0)
+    top_p: float = Field(default=0.9, gt=0.0, le=1.0)
+    max_tokens: int = Field(default=150, ge=0)
 
 def load_resources():
     global model, tokenizer

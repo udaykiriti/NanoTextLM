@@ -235,8 +235,19 @@ class NanoTextLM(nn.Module):
         idx_next = torch.multinomial(probs, num_samples=1)
         return idx_next
 
+    def _validate_generation_args(self, max_new_tokens, temperature, top_k, top_p):
+        if max_new_tokens < 0:
+            raise ValueError("max_new_tokens must be non-negative")
+        if temperature < 0:
+            raise ValueError("temperature must be non-negative")
+        if top_k is not None and top_k <= 0:
+            raise ValueError("top_k must be positive when provided")
+        if top_p is not None and not 0 < top_p <= 1.0:
+            raise ValueError("top_p must be in the range (0, 1]")
+
     @torch.inference_mode()
     def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None, top_p=None):
+        self._validate_generation_args(max_new_tokens, temperature, top_k, top_p)
         for _ in range(max_new_tokens):
             idx_cond = idx if idx.size(1) <= self.config.max_seq_len else idx[:, -self.config.max_seq_len:]
             logits, _ = self(idx_cond)
@@ -246,6 +257,7 @@ class NanoTextLM(nn.Module):
 
     @torch.inference_mode()
     def generate_stream(self, idx, max_new_tokens, temperature=1.0, top_k=None, top_p=None):
+        self._validate_generation_args(max_new_tokens, temperature, top_k, top_p)
         for _ in range(max_new_tokens):
             idx_cond = idx if idx.size(1) <= self.config.max_seq_len else idx[:, -self.config.max_seq_len:]
             logits, _ = self(idx_cond)
