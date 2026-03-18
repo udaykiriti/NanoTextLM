@@ -15,6 +15,10 @@ class TextDataset(Dataset):
         split_ratio (float): The ratio of data to use for training (default 0.9).
     """
     def __init__(self, data_path: str, block_size: int, split: str = 'train', split_ratio: float = 0.9):
+        if block_size <= 0:
+            raise ValueError("block_size must be positive")
+        if not 0 < split_ratio < 1:
+            raise ValueError("split_ratio must be between 0 and 1")
         self.block_size = block_size
         if split not in {"train", "val"}:
             raise ValueError(f"Unsupported split '{split}'. Expected 'train' or 'val'.")
