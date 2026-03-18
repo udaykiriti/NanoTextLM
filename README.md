@@ -1,19 +1,40 @@
 # NanoTextLM
 
-[![Python Tests](https://github.com/udaykiriti/NanoTextLM/actions/workflows/tests.yml/badge.svg)](https://github.com/udaykiriti/NanoTextLM/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<p align="center">
+  <a href="https://github.com/udaykiriti/NanoTextLM/actions">
+    <img src="https://github.com/udaykiriti/NanoTextLM/actions/workflows/tests.yml/badge.svg" alt="Python Tests">
+  </a>
+  <a href="https://www.python.org/downloads/">
+    <img src="https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white" alt="Python 3.9+">
+  </a>
+  <a href="https://pytorch.org/">
+    <img src="https://img.shields.io/badge/PyTorch-2.x-EE4C2C?logo=pytorch&logoColor=white" alt="PyTorch 2.x">
+  </a>
+  <a href="https://fastapi.tiangolo.com/">
+    <img src="https://img.shields.io/badge/FastAPI-Web_UI-009688?logo=fastapi&logoColor=white" alt="FastAPI">
+  </a>
+  <a href="https://opensource.org/licenses/MIT">
+    <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License MIT">
+  </a>
+</p>
 
-> Compact transformer training. Fast local iteration. Minimal moving parts.
+<p align="center">
+  <strong>Compact transformer training. Fast local iteration. Minimal moving parts.</strong>
+</p>
 
-**NanoTextLM** is a lightweight language model project built with PyTorch. It focuses on a compact LLaMA-style architecture, simple training scripts, and minimal inference surfaces for local experimentation.
+<p align="center">
+  NanoTextLM is a lightweight PyTorch language-model project for learning, training, and serving a compact LLaMA-style transformer without a heavy framework stack.
+</p>
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│ NanoTextLM                                                  │
-│ RoPE + SwiGLU + RMSNorm + Flash Attention                   │
-│ Train small. Inspect everything. Ship clean experiments.    │
-└──────────────────────────────────────────────────────────────┘
-```
+<p align="center">
+  <code>RoPE</code>
+  <code>SwiGLU</code>
+  <code>RMSNorm</code>
+  <code>Flash Attention</code>
+  <code>AMP</code>
+  <code>FastAPI</code>
+  <code>CLI Chat</code>
+</p>
 
 ## Why This Project
 
@@ -28,6 +49,15 @@
 - **Modern core:** RoPE, RMSNorm, SwiGLU, Flash Attention.
 - **Practical training:** AMP, gradient accumulation, optional WandB, checkpoint resume.
 - **Usable inference:** CLI chat, web streaming, runtime overrides for device/checkpoint/tokenizer.
+
+## Tech Stack
+
+| Layer | Tools |
+|-------|-------|
+| Model | PyTorch, Flash Attention, RMSNorm, RoPE, SwiGLU |
+| Data | NumPy memmap datasets, tokenizer pipeline, Tiny Shakespeare demo data |
+| Serving | FastAPI, Uvicorn, streaming text responses |
+| Developer Workflow | Makefile commands, pytest, GitHub Actions, Docker build |
 
 ---
 
