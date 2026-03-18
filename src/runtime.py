@@ -20,7 +20,8 @@ def should_compile_model(device: str, env: dict | None = None) -> bool:
     return device == "cuda" and compile_flag not in {"0", "false", "no"}
 
 
-def resolve_checkpoint_path(project_root: str = PROJECT_ROOT) -> str:
+def resolve_checkpoint_path(project_root: str | None = None) -> str:
+    project_root = PROJECT_ROOT if project_root is None else project_root
     override_path = os.environ.get("NANOTEXTLM_CHECKPOINT")
     if override_path:
         return override_path
@@ -30,7 +31,8 @@ def resolve_checkpoint_path(project_root: str = PROJECT_ROOT) -> str:
     return os.path.join(project_root, "checkpoints", "best_model.pt")
 
 
-def resolve_tokenizer_path(project_root: str = PROJECT_ROOT) -> str:
+def resolve_tokenizer_path(project_root: str | None = None) -> str:
+    project_root = PROJECT_ROOT if project_root is None else project_root
     override_path = os.environ.get("NANOTEXTLM_TOKENIZER")
     if override_path:
         return override_path
