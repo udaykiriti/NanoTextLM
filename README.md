@@ -3,7 +3,31 @@
 [![Python Tests](https://github.com/udaykiriti/NanoTextLM/actions/workflows/tests.yml/badge.svg)](https://github.com/udaykiriti/NanoTextLM/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+> Compact transformer training. Fast local iteration. Minimal moving parts.
+
 **NanoTextLM** is a lightweight language model project built with PyTorch. It focuses on a compact LLaMA-style architecture, simple training scripts, and minimal inference surfaces for local experimentation.
+
+```text
+┌──────────────────────────────────────────────────────────────┐
+│ NanoTextLM                                                  │
+│ RoPE + SwiGLU + RMSNorm + Flash Attention                   │
+│ Train small. Inspect everything. Ship clean experiments.    │
+└──────────────────────────────────────────────────────────────┘
+```
+
+## Why This Project
+
+| Built For | What You Get |
+|-----------|---------------|
+| Learning modern LM internals | A readable LLaMA-style implementation in plain PyTorch |
+| Quick local experiments | Small configs, demo training, CLI chat, and a FastAPI app |
+| Simple iteration | Minimal runtime helpers, clear scripts, and direct checkpoints |
+
+## At A Glance
+
+- **Modern core:** RoPE, RMSNorm, SwiGLU, Flash Attention.
+- **Practical training:** AMP, gradient accumulation, optional WandB, checkpoint resume.
+- **Usable inference:** CLI chat, web streaming, runtime overrides for device/checkpoint/tokenizer.
 
 ---
 
@@ -27,6 +51,13 @@
 ---
 
 ## Quick Start
+
+```bash
+make install
+make prepare
+make demo
+make web
+```
 
 ### 1. Installation
 Ensure you have Python 3.9+ installed. Clone the repo and install dependencies:
@@ -108,10 +139,10 @@ NanoTextLM/
 
 For a deeper dive into the architecture and setup, please refer to the following guides:
 
-*   **Architecture Guide:** [Detailed technical overview of the model](docs/architecture.md)
-*   **Setup Guide:** [Environment configuration and installation steps](docs/setup.md)
-*   **Usage Guide:** [Comprehensive instructions for training and inference](docs/usage.md)
-*   **Data Pipeline:** [Details on dataset preparation and tokenization](docs/data_pipeline.md)
+- **Architecture Guide:** [Detailed technical overview of the model](docs/architecture.md)
+- **Setup Guide:** [Environment configuration and installation steps](docs/setup.md)
+- **Usage Guide:** [Comprehensive instructions for training and inference](docs/usage.md)
+- **Data Pipeline:** [Details on dataset preparation and tokenization](docs/data_pipeline.md)
 
 ---
 
