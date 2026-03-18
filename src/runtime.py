@@ -10,7 +10,11 @@ from model import NanoTextLM
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def get_device() -> str:
+def get_device(env: dict | None = None) -> str:
+    env = os.environ if env is None else env
+    override_device = env.get("NANOTEXTLM_DEVICE")
+    if override_device:
+        return override_device.strip().lower()
     return "cuda" if torch.cuda.is_available() else "cpu"
 
 
