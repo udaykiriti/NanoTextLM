@@ -10,11 +10,19 @@ from model import NanoTextLM
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def get_device(env: dict | None = None) -> str:
+def _get_env_override(name: str, env: dict | None = None) -> str | None:
     env = os.environ if env is None else env
-    override_device = env.get("NANOTEXTLM_DEVICE")
+    value = env.get(name)
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
+def get_device(env: dict | None = None) -> str:
+    override_device = _get_env_override("NANOTEXTLM_DEVICE", env)
     if override_device:
-        device = override_device.strip().lower()
+        device = override_device.lower()
         if device not in {"cpu", "cuda"}:
             raise ValueError("NANOTEXTLM_DEVICE must be 'cpu' or 'cuda'")
         return device
@@ -22,14 +30,16 @@ def get_device(env: dict | None = None) -> str:
 
 
 def should_compile_model(device: str, env: dict | None = None) -> bool:
-    env = os.environ if env is None else env
-    compile_flag = env.get("NANOTEXTLM_COMPILE", "1").strip().lower()
+    compile_flag = _get_env_override("NANOTEXTLM_COMPILE", env)
+    if compile_flag is None:
+        compile_flag = "1"
+    compile_flag = compile_flag.lower()
     return device == "cuda" and compile_flag not in {"0", "false", "no"}
 
 
 def resolve_checkpoint_path(project_root: str | None = None) -> str:
     project_root = PROJECT_ROOT if project_root is None else project_root
-    override_path = os.environ.get("NANOTEXTLM_CHECKPOINT")
+    override_path = _get_env_override("NANOTEXTLM_CHECKPOINT")
     if override_path:
         return override_path
     final_path = os.path.join(project_root, "checkpoints", "final_model.pt")
@@ -40,7 +50,7 @@ def resolve_checkpoint_path(project_root: str | None = None) -> str:
 
 def resolve_tokenizer_path(project_root: str | None = None) -> str:
     project_root = PROJECT_ROOT if project_root is None else project_root
-    override_path = os.environ.get("NANOTEXTLM_TOKENIZER")
+    override_path = _get_env_override("NANOTEXTLM_TOKENIZER")
     if override_path:
         return override_path
     return os.path.join(project_root, "tokenizer.json")

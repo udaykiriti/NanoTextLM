@@ -25,6 +25,7 @@ def test_should_compile_model_only_on_cuda():
 def test_get_device_prefers_environment_override():
     assert runtime.get_device(env={"NANOTEXTLM_DEVICE": "cpu"}) == "cpu"
     assert runtime.get_device(env={"NANOTEXTLM_DEVICE": "cuda"}) == "cuda"
+    assert runtime.get_device(env={"NANOTEXTLM_DEVICE": "   "}) in {"cpu", "cuda"}
 
 
 def test_get_device_rejects_invalid_override():
@@ -37,6 +38,13 @@ def test_resolve_checkpoint_path_prefers_environment_override(monkeypatch, tmp_p
     monkeypatch.setenv("NANOTEXTLM_CHECKPOINT", str(override_path))
 
     assert runtime.resolve_checkpoint_path() == str(override_path)
+
+
+def test_resolve_checkpoint_path_ignores_blank_override(monkeypatch, tmp_path):
+    monkeypatch.setattr(runtime, "PROJECT_ROOT", str(tmp_path))
+    monkeypatch.setenv("NANOTEXTLM_CHECKPOINT", "   ")
+
+    assert runtime.resolve_checkpoint_path() == os.path.join(str(tmp_path), "checkpoints", "best_model.pt")
 
 
 def test_resolve_tokenizer_path_prefers_environment_override(monkeypatch, tmp_path):
