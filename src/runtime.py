@@ -21,6 +21,9 @@ def should_compile_model(device: str, env: dict | None = None) -> bool:
 
 
 def resolve_checkpoint_path(project_root: str = PROJECT_ROOT) -> str:
+    override_path = os.environ.get("NANOTEXTLM_CHECKPOINT")
+    if override_path:
+        return override_path
     final_path = os.path.join(project_root, "checkpoints", "final_model.pt")
     if os.path.exists(final_path):
         return final_path
