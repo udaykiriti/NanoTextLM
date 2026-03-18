@@ -3,15 +3,12 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 import torch
-from config import ModelConfig
-from model import NanoTextLM
-from tokenizers import Tokenizer
 import os
 import asyncio
+from runtime import PROJECT_ROOT, load_inference_resources
 
 # Setup
 app = FastAPI(title="NanoTextLM API")
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 templates = Jinja2Templates(directory=os.path.join(PROJECT_ROOT, "src", "templates"))
 
 # Global State
@@ -29,29 +26,11 @@ def load_resources():
     global model, tokenizer
     if model is None:
         print(f"Loading NanoTextLM on {device}...")
-        model_path = os.path.join(PROJECT_ROOT, "checkpoints", "final_model.pt")
-        if not os.path.exists(model_path):
-             model_path = os.path.join(PROJECT_ROOT, "checkpoints", "best_model.pt")
-             
-        tokenizer_path = os.path.join(PROJECT_ROOT, "tokenizer.json")
-        
-        m_conf = ModelConfig()
-        model = NanoTextLM(m_conf).to(device)
-        
-        if os.path.exists(model_path):
-            state_dict = torch.load(model_path, map_location=device)
-            if 'model' in state_dict:
-                state_dict = state_dict['model']
-            model.load_state_dict(state_dict)
-        else:
+        model, tokenizer, _, model_path, checkpoint_exists = load_inference_resources()
+        if not checkpoint_exists:
             print("Warning: No checkpoint found. Using random weights.")
-            
-        model.eval()
-        if hasattr(torch, "compile"):
-             # Compilation might add startup latency but speeds up serving
-             model = torch.compile(model)
-             
-        tokenizer = Tokenizer.from_file(tokenizer_path)
+        else:
+            print(f"Loaded model from {model_path}")
 
 @app.on_event("startup")
 async def startup_event():
