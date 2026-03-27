@@ -14,7 +14,7 @@ templates = Jinja2Templates(directory=os.path.join(PROJECT_ROOT, "src", "templat
 # Global State
 model = None
 tokenizer = None
-device = "cuda" if torch.cuda.is_available() else "cpu"
+device = "cpu"
 
 class GenerateRequest(BaseModel):
     prompt: str
@@ -24,10 +24,10 @@ class GenerateRequest(BaseModel):
     max_tokens: int = Field(default=150, ge=0)
 
 def load_resources():
-    global model, tokenizer
+    global model, tokenizer, device
     if model is None:
+        model, tokenizer, device, model_path, checkpoint_exists = load_inference_resources()
         print(f"Loading NanoTextLM on {device}...")
-        model, tokenizer, _, model_path, checkpoint_exists = load_inference_resources()
         if not checkpoint_exists:
             print("Warning: No checkpoint found. Using random weights.")
         else:
