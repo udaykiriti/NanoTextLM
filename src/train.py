@@ -64,6 +64,18 @@ def seed_everything(seed=42):
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
+def save_checkpoint(model, optimizer, scaler, m_conf, output_path, iter_num, best_val_loss):
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    checkpoint = {
+        'model': model.state_dict(),
+        'optimizer': optimizer.state_dict(),
+        'scaler': scaler.state_dict(),
+        'iter_num': iter_num,
+        'best_val_loss': best_val_loss,
+        'config': vars(m_conf)
+    }
+    torch.save(checkpoint, output_path)
+
 def train():
     parser = argparse.ArgumentParser()
     parser.add_argument('--demo', action='store_true', help='Run in demo mode (small model, shakespeare config)')
@@ -153,7 +165,11 @@ def train():
     # Resume Logic
     iter_num = 0
     best_val_loss = 1e9
-    
+    early_stopping_patience = int(getattr(t_conf, "early_stopping_patience", 0))
+    early_stopping_min_delta = float(getattr(t_conf, "early_stopping_min_delta", 0.0))
+    evals_without_improvement = 0
+    should_stop = False
+
     if args.resume:
         if os.path.exists(args.resume):
             print(f"Resuming from checkpoint: {args.resume}")
@@ -189,11 +205,12 @@ def train():
     # Training Loop
     model.train()
     t0 = time.time()
-    
+    tokens_since_last_log = 0
+
     print(f"Starting training with Gradient Accumulation = {t_conf.gradient_accumulation_steps}")
     
     optimizer.zero_grad(set_to_none=True)
-    
+
     for epoch in range(t_conf.max_epochs):
         for micro_step, (x, y) in enumerate(train_loader):
             # Update Learning Rate
@@ -202,7 +219,8 @@ def train():
                 param_group['lr'] = lr
                 
             x, y = x.to(t_conf.device, non_blocking=True), y.to(t_conf.device, non_blocking=True)
-            
+            tokens_since_last_log += x.numel()
+
             # Forward pass with Mixed Precision
             ctx = torch.amp.autocast(device_type=t_conf.device.type, dtype=torch.float16) if t_conf.device.type == 'cuda' else nullcontext()
             
@@ -218,8 +236,9 @@ def train():
             if (micro_step + 1) % t_conf.gradient_accumulation_steps == 0:
                 # Gradient Clipping
                 scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), t_conf.grad_clip)
-                
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), t_conf.grad_clip)
+                grad_norm = grad_norm.item() if torch.is_tensor(grad_norm) else float(grad_norm)
+
                 # Step
                 scaler.step(optimizer)
                 scaler.update()
@@ -232,13 +251,22 @@ def train():
                     t0 = t1
                     # Multiply loss back for display
                     loss_val = loss.item() * t_conf.gradient_accumulation_steps
-                    print(f"Epoch {epoch+1} | Step {iter_num} | Loss: {loss_val:.4f} | LR: {lr:.2e} | Time: {dt*1000:.2f}ms")
-                    
+                    tokens_per_sec = tokens_since_last_log / dt if dt > 0 else 0.0
+                    tokens_since_last_log = 0
+
+                    print(
+                        f"Epoch {epoch+1} | Step {iter_num} | Loss: {loss_val:.4f} | "
+                        f"LR: {lr:.2e} | GN: {grad_norm:.3f} | Tok/s: {tokens_per_sec:.0f} | "
+                        f"Time: {dt*1000:.2f}ms"
+                    )
+
                     if wandb is not None and wandb.run:
                         wandb.log({
                             "train/loss": loss_val,
                             "train/lr": lr,
-                            "train/step_time_ms": dt*1000,
+                            "train/grad_norm": grad_norm,
+                            "train/tokens_per_sec": tokens_per_sec,
+                            "train/step_time_ms": dt * 1000,
                             "epoch": epoch
                         }, step=iter_num)
 
@@ -250,41 +278,53 @@ def train():
                         t_conf.device,
                         eval_iters=t_conf.eval_iters
                     )
-                    print(f"Step {iter_num} Evaluation: Train Loss {losses['train']:.4f}, Val Loss {losses['val']:.4f}")
-                    
+                    train_eval_loss = float(losses['train'])
+                    val_loss = float(losses['val'])
+                    print(f"Step {iter_num} Evaluation: Train Loss {train_eval_loss:.4f}, Val Loss {val_loss:.4f}")
+
                     if wandb is not None and wandb.run:
                         wandb.log({
-                            "val/loss": losses['val'],
-                            "train/eval_loss": losses['train']
+                            "val/loss": val_loss,
+                            "train/eval_loss": train_eval_loss
                         }, step=iter_num)
-                    
-                    if losses['val'] < best_val_loss:
-                        best_val_loss = losses['val']
-                        os.makedirs(t_conf.output_dir, exist_ok=True)
+
+                    if val_loss < (best_val_loss - early_stopping_min_delta):
+                        best_val_loss = val_loss
+                        evals_without_improvement = 0
                         print(f"Saving best model (val_loss {best_val_loss:.4f})")
-                        checkpoint = {
-                            'model': model.state_dict(),
-                            'optimizer': optimizer.state_dict(),
-                            'scaler': scaler.state_dict(),
-                            'iter_num': iter_num,
-                            'best_val_loss': best_val_loss,
-                            'config': vars(m_conf)
-                        }
-                        torch.save(checkpoint, os.path.join(t_conf.output_dir, "best_model.pt"))
-                
+                        save_checkpoint(
+                            model, optimizer, scaler, m_conf,
+                            os.path.join(t_conf.output_dir, "best_model.pt"),
+                            iter_num, best_val_loss
+                        )
+                    else:
+                        evals_without_improvement += 1
+                        if early_stopping_patience > 0:
+                            print(
+                                f"No val improvement ({evals_without_improvement}/{early_stopping_patience})"
+                            )
+                            if evals_without_improvement >= early_stopping_patience:
+                                print("Early stopping triggered.")
+                                should_stop = True
+
+                if getattr(t_conf, "save_every", 0) > 0 and iter_num > 0 and iter_num % t_conf.save_every == 0:
+                    ckpt_path = os.path.join(t_conf.output_dir, f"checkpoint_step_{iter_num}.pt")
+                    print(f"Saving periodic checkpoint: {ckpt_path}")
+                    save_checkpoint(model, optimizer, scaler, m_conf, ckpt_path, iter_num, best_val_loss)
+
                 iter_num += 1
+                if should_stop:
+                    break
+
+        if should_stop:
+            break
 
     # Save final
-    os.makedirs(t_conf.output_dir, exist_ok=True)
-    checkpoint = {
-        'model': model.state_dict(),
-        'optimizer': optimizer.state_dict(),
-        'scaler': scaler.state_dict(),
-        'iter_num': iter_num,
-        'best_val_loss': best_val_loss,
-        'config': vars(m_conf)
-    }
-    torch.save(checkpoint, os.path.join(t_conf.output_dir, "final_model.pt"))
+    save_checkpoint(
+        model, optimizer, scaler, m_conf,
+        os.path.join(t_conf.output_dir, "final_model.pt"),
+        iter_num, best_val_loss
+    )
     if wandb is not None and wandb.run:
         wandb.finish()
     print("Training complete.")
