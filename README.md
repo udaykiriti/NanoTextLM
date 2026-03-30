@@ -36,7 +36,7 @@
   <code>CLI Chat</code>
 </p>
 
-## [Overview] Why This Project
+## Overview
 
 | Built For | What You Get |
 |-----------|---------------|
@@ -44,13 +44,13 @@
 | Quick local experiments | Small configs, demo training, CLI chat, and a FastAPI app |
 | Simple iteration | Minimal runtime helpers, clear scripts, and direct checkpoints |
 
-## [Snapshot] At A Glance
+## Snapshot
 
 - **[Model]**: RoPE, RMSNorm, SwiGLU, Flash Attention.
 - **[Training]**: AMP, gradient accumulation, optional WandB, checkpoint resume.
 - **[Serving]**: CLI chat, web streaming, runtime overrides for device/checkpoint/tokenizer.
 
-## [Stack] Tech Stack
+## Stack
 
 | Layer | Tools |
 |-------|-------|
@@ -61,26 +61,26 @@
 
 ---
 
-## [Features] Key Features
+## Features
 
-### [Model]
+### Model
 - **RoPE**: Rotary positional embeddings.
 - **SwiGLU + RMSNorm**: Modern transformer building blocks.
 - **Flash Attention**: Fast attention path on supported PyTorch builds.
 
-### [Training]
+### Training
 - **AMP**: Mixed precision for lower memory use.
 - **Gradient accumulation**: More effective batch size on smaller hardware.
 - **Checkpoint resume**: Continue interrupted runs.
 
-### [Inference]
+### Inference
 - **CLI chat**: Quick local interaction.
 - **FastAPI app**: Browser-based text generation.
 - **Runtime overrides**: Device, tokenizer, checkpoint, and compile controls.
 
 ---
 
-## [Quick Start] Quick Start
+## Quick Start
 
 ```bash
 make install
@@ -89,7 +89,7 @@ make demo
 make web
 ```
 
-### [1] Install
+###  Install
 Ensure you have Python 3.9+ installed. Clone the repo and install dependencies:
 ```bash
 git clone https://github.com/udaykiriti/NanoTextLM.git
@@ -102,19 +102,19 @@ If you want to run tests locally, make sure `pytest` is installed in your enviro
 pip install pytest
 ```
 
-### [2] Prepare Data
+###  Prepare Data
 Download and tokenize the Tiny Shakespeare dataset for a quick demo:
 ```bash
 make prepare
 ```
 
-### [3] Train A Demo Model
+### Train A Demo Model
 Start a small-scale training run to verify your setup:
 ```bash
 make demo
 ```
 
-### [4] Run The App
+### Run The App
 Launch the interactive Web UI and start generating text:
 ```bash
 make web
@@ -134,7 +134,7 @@ make test
 
 ---
 
-## [Config] Model Configuration
+## Model Configuration
 
 NanoTextLM is highly configurable. Key parameters in `src/config.py` include:
 
@@ -147,7 +147,7 @@ NanoTextLM is highly configurable. Key parameters in `src/config.py` include:
 
 ---
 
-## [Structure] Project Structure
+## Project Structure
 
 ```text
 NanoTextLM/
@@ -165,7 +165,7 @@ NanoTextLM/
 
 ---
 
-## [Docs] Documentation
+## Docs
 
 For a deeper dive into the architecture and setup, please refer to the following guides:
 
@@ -176,18 +176,6 @@ For a deeper dive into the architecture and setup, please refer to the following
 
 ---
 
-## [Contributing] Contributing
-
-We welcome contributions of all kinds! Whether you're fixing a bug, adding a new feature, or updating documentation, follow these steps to contribute:
-
-1.  **Fork** the repository to your own account.
-2.  **Create** a new branch for your feature (`git checkout -b feature/amazing-feature`).
-3.  **Commit** your changes with clear messages (`git commit -s -m 'Add amazing feature'`).
-4.  **Push** your branch to your fork (`git push origin feature/amazing-feature`).
-5.  **Submit** a Pull Request against our main branch.
-
----
-
-## [License] License
+## License
 
 This project is licensed under the **MIT License**. For the full legal text, please refer to the [LICENSE](LICENSE) file.
