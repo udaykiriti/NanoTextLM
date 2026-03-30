@@ -1,21 +1,10 @@
 # NanoTextLM
 
 <p align="center">
-  <a href="https://github.com/udaykiriti/NanoTextLM/actions">
-    <img src="https://github.com/udaykiriti/NanoTextLM/actions/workflows/tests.yml/badge.svg" alt="Python Tests">
-  </a>
-  <a href="https://www.python.org/downloads/">
-    <img src="https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white" alt="Python 3.9+">
-  </a>
-  <a href="https://pytorch.org/">
-    <img src="https://img.shields.io/badge/PyTorch-2.x-EE4C2C?logo=pytorch&logoColor=white" alt="PyTorch 2.x">
-  </a>
-  <a href="https://fastapi.tiangolo.com/">
-    <img src="https://img.shields.io/badge/FastAPI-Web_UI-009688?logo=fastapi&logoColor=white" alt="FastAPI">
-  </a>
-  <a href="https://opensource.org/licenses/MIT">
-    <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License MIT">
-  </a>
+  <img src="https://img.shields.io/badge/Python-3.9+-blue?style=flat-square&logo=python" />
+  <img src="https://img.shields.io/badge/PyTorch-2.x-red?style=flat-square&logo=pytorch" />
+  <img src="https://img.shields.io/badge/FastAPI-API-green?style=flat-square&logo=fastapi" />
+  <img src="https://img.shields.io/badge/License-MIT-lightgrey?style=flat-square" />
 </p>
 
 <p align="center">
